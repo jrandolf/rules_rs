@@ -7,7 +7,7 @@ load("@rules_rust//rust:rust_common.bzl", "CrateInfo")
 load("@rules_rust//rust/private:rust_analyzer.bzl", "rust_analyzer_aspect")
 
 _SETTING = str(Label("@rules_rust//cargo/settings:cargo_target_triple"))
-_WINDOWS = "x86_64-pc-windows-gnullvm"
+_WINDOWS = "x86_64-pc-windows-msvc"
 _LINUX = "aarch64-unknown-linux-gnu"
 
 def _prost_impl(ctx):
@@ -20,7 +20,7 @@ def _consumer_impl(ctx):
     crate = analysistest.target_under_test(env)[CrateInfo]
     asserts.equals(env, "consumer.rs", crate.root.basename)
     rustc_args = [arg for action in analysistest.target_actions(env) for arg in (action.argv or [])]
-    asserts.true(env, any([arg.startswith("--extern=renamed_macro=") for arg in rustc_args]), str(rustc_args))
+    asserts.true(env, any([arg.removeprefix("--extern=").startswith("renamed_macro=") for arg in rustc_args]), str(rustc_args))
     dylibs = analysistest.target_under_test(env)[OutputGroupInfo].rust_analyzer_proc_macro_dylib.to_list()
     asserts.true(env, len(dylibs) > 0)
     asserts.false(env, any(["__cargo_unresolved" in file.owner.name for file in dylibs]), str(dylibs))
@@ -47,8 +47,8 @@ def _inactive_macro_impl(ctx):
     return analysistest.end(env)
 
 _inactive_macro_test = analysistest.make(_inactive_macro_impl, extra_target_under_test_aspects = [rust_analyzer_aspect], config_settings = {
-    "//command_line_option:platforms": str(Label("//rs/platforms:x86_64-unknown-linux-musl")),
-    _SETTING: _WINDOWS,
+    "//command_line_option:platforms": str(Label("//rs/platforms:x86_64-unknown-linux-gnu")),
+    _SETTING: "aarch64-apple-darwin",
 })
 
 _prost_windows_test = analysistest.make(_prost_impl, config_settings = {
@@ -68,9 +68,10 @@ _inactive_test = analysistest.make(_inactive_impl, config_settings = {
     _SETTING: "",
 })
 
-def rendered_tests():
+def rendered_tests(include_prost = True):
     _inactive_macro_test(name = "inactive_macro_editor_test", target_under_test = "@feature_context_rendered//:generated_macro")
-    _prost_windows_test(name = "prost_windows_context_test", target_under_test = "//rs/private/prost:default_prost_toolchain_impl")
-    _prost_linux_test(name = "prost_linux_context_test", target_under_test = "//rs/private/prost:default_prost_toolchain_impl")
+    if include_prost:
+        _prost_windows_test(name = "prost_windows_context_test", target_under_test = "//rs/private/prost:default_prost_toolchain_impl")
+        _prost_linux_test(name = "prost_linux_context_test", target_under_test = "//rs/private/prost:default_prost_toolchain_impl")
     _consumer_test(name = "rendered_context_test", target_under_test = "@feature_context_rendered//:consumer")
     _inactive_test(name = "inactive_context_test", target_under_test = "@feature_context_rendered//:target_only")

@@ -6,8 +6,8 @@ load("//rs/private:all_crate_deps.bzl", "all_crate_deps", "crate_aliases", "crat
 load("//rs/private:cargo_select.bzl", "cargo_config_settings")
 load("//rs/private:rust_crate.bzl", "rust_crate")
 
-_WINDOWS = "x86_64-pc-windows-gnullvm"
-_WINDOWS_ARM = "aarch64-pc-windows-gnullvm"
+_WINDOWS = "x86_64-pc-windows-msvc"
+_WINDOWS_ARM = "aarch64-pc-windows-msvc"
 
 def _repository_impl(ctx):
     ctx.file("BUILD.bazel", 'load("@rules_rs//rs/private/feature_context_fixture:rendered.bzl", "rendered_fixture")\nrendered_fixture()\n')
@@ -31,7 +31,7 @@ def _configuration(features):
 def rendered_fixture():
     """Define a target-only crate with split build scripts and annotated inputs."""
     native.package(default_visibility = ["//visibility:public"])
-    cargo_config_settings(["", _WINDOWS], sorted(set(SUPPORTED_EXEC_TRIPLES + [_WINDOWS, _WINDOWS_ARM, "x86_64-unknown-linux-musl"])))
+    cargo_config_settings(["", _WINDOWS, "aarch64-apple-darwin"], sorted(set(SUPPORTED_EXEC_TRIPLES + [_WINDOWS, _WINDOWS_ARM, "x86_64-unknown-linux-musl"])))
     rust_library(name = "common_annotation", srcs = ["lib.rs"])
     native.filegroup(name = "common_data", srcs = ["lib.rs"])
     rust_library(
@@ -103,5 +103,6 @@ def rendered_fixture():
         name = "consumer",
         srcs = ["consumer.rs"],
         aliases = {":generated_macro": "renamed_macro"},
-        deps = [":target_only", ":workspace_macro", ":generated_macro"],
+        deps = [":target_only"],
+        proc_macro_deps = [":workspace_macro", ":generated_macro"],
     )

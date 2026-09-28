@@ -264,10 +264,13 @@ def rust_crate(
 
             # The alias selects before the compiler rule's incoming transition.
             # Apply the same Cargo setting map when choosing its active rows.
-            incoming_configurations = {
-                incoming: configurations[cargo_target_triple_map.get(incoming, incoming)]
-                for incoming in set(configurations).union(cargo_target_triple_map)
-            }
+            incoming_configurations = {}
+            for incoming in set(configurations).union(cargo_target_triple_map):
+                # The standard compiler only remaps originating execution
+                # contexts; it leaves an unset target context unchanged.
+                selected = cargo_target_triple_map.get(incoming, incoming) if incoming else incoming
+                if selected in configurations:
+                    incoming_configurations[incoming] = configurations[selected]
             native.alias(
                 name = name,
                 actual = cargo_select(
