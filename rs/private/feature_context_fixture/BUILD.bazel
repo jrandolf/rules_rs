@@ -7,6 +7,6 @@ feature_context_tests()
 
 warm_git_facts_test(name = "warm_git_facts_test")
 
-# The selected standard compiler keeps Prost in a separate module.
-# The two compiler-specific Prost checks run on the upstream PR branch.
-rendered_tests(include_prost = False)
+# The upstream branch covers its compiler-specific inactive copies and Prost.
+# The standard compiler uses direct targets with explicit macro dependencies.
+rendered_tests()

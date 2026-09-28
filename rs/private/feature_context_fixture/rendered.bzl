@@ -4,6 +4,7 @@ load("@rules_rust//rust:defs.bzl", "rust_library", "rust_proc_macro")
 load("//rs/platforms:triples.bzl", "SUPPORTED_EXEC_TRIPLES")
 load("//rs/private:all_crate_deps.bzl", "all_crate_deps", "crate_aliases", "crate_features")
 load("//rs/private:cargo_select.bzl", "cargo_config_settings")
+load("//rs/private:proc_macro_alias.bzl", "proc_macro_alias")
 load("//rs/private:rust_crate.bzl", "rust_crate")
 
 _WINDOWS = "x86_64-pc-windows-msvc"
@@ -81,7 +82,7 @@ def rendered_fixture():
         name = "generated_macro",
         crate_name = "generated_macro",
         configurations = {_WINDOWS: _configuration(host_features)},
-        cargo_target_triple_map = {"": _WINDOWS},
+        cargo_target_triple_map = {_WINDOWS_ARM: _WINDOWS},
         deps = [],
         link_deps = [],
         data = [],
@@ -91,6 +92,7 @@ def rendered_fixture():
         is_proc_macro = True,
         binaries = {},
     ))
+    proc_macro_alias(name = "generated_macro__alias", actual = ":generated_macro")
     macro_data = {"configurations": {_WINDOWS: _configuration(host_features)}}
     rust_proc_macro(
         name = "workspace_macro",
@@ -102,7 +104,7 @@ def rendered_fixture():
     rust_library(
         name = "consumer",
         srcs = ["consumer.rs"],
-        aliases = {":generated_macro": "renamed_macro"},
+        aliases = {":generated_macro__alias": "renamed_macro"},
         deps = [":target_only"],
         proc_macro_deps = [":workspace_macro", ":generated_macro"],
     )

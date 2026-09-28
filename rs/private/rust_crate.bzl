@@ -10,7 +10,6 @@ load("//rs:rust_library.bzl", "rust_library")
 load("//rs:rust_proc_macro.bzl", "rust_proc_macro")
 load(":cargo_build_script_variants.bzl", "cargo_build_script_for_configurations")
 load(":cargo_select.bzl", "cargo_select")
-load(":inactive_crate.bzl", "inactive_crate")
 
 def rust_crate(
         name,
@@ -117,14 +116,18 @@ def rust_crate(
         default = {},
     )
 
-    # The compiler inspects both target and exec copies to classify each
-    # dependency. A supported but unreachable copy must remain analyzable;
-    # its empty dependency/feature selections never enter a compile action
-    # used by the consumer.
-    target_compatible_with = target_compatible_with + select({
-        "@" + hub_name + "//:__cargo/supported": [],
-        "//conditions:default": ["@platforms//:incompatible"],
-    }) if hub_name else target_compatible_with
+    # The standard compiler separates deps from proc_macro_deps. Keep direct
+    # library targets so its incoming transition normalizes execution Cargo
+    # contexts before compatibility and attribute selects are evaluated.
+    target_compatible_with = target_compatible_with + cargo_select(
+        {
+            cargo_target_triple: {platform_triple: [] for platform_triple in configuration["crate_features_by_triple"]}
+            for cargo_target_triple, configuration in configurations.items()
+        },
+        hub_name,
+        use_legacy_rules_rust_platforms,
+        default = ["@platforms//:incompatible"],
+    ) if hub_name else target_compatible_with
 
     compile_data = native.glob(
         include = ["**"],
@@ -185,16 +188,6 @@ def rust_crate(
         )
 
     rustc_flags = rustc_flags + ["--cap-lints=allow"]
-    active_conditions = {
-        cargo_target_triple: {platform_triple: [] for platform_triple in configuration["crate_features_by_triple"]}
-        for cargo_target_triple, configuration in configurations.items()
-    }
-    active_compatible_with = cargo_select(
-        active_conditions,
-        hub_name,
-        use_legacy_rules_rust_platforms,
-        default = ["@platforms//:incompatible"],
-    ) if hub_name else []
     if not has_lib:
         # Keep the hub's library label incompatible for binary-only crates.
         native.filegroup(
@@ -205,7 +198,7 @@ def rust_crate(
         )
     else:
         kwargs = dict(
-            name = name + "__cargo_active" if hub_name else name,
+            name = name,
             cargo_target_triple_map = cargo_target_triple_map,
             crate_name = crate_name,
             version = version,
@@ -222,7 +215,7 @@ def rust_crate(
             rustc_env_files = ["cargo_toml_env_vars.env"],
             rustc_flags = rustc_flags,
             tags = crate_tags,
-            target_compatible_with = active_compatible_with,
+            target_compatible_with = target_compatible_with,
             package_metadata = [package_metadata_name],
             visibility = crate_visibility,
         )
@@ -234,58 +227,6 @@ def rust_crate(
         else:
             kwargs["link_deps"] = link_deps
             (_rust_library if skip_deps_verification else rust_library)(**kwargs)
-
-        if hub_name:
-            # The public rules_rust macros inspect both configurations before
-            # filtering normal and procedural-macro dependencies. Keep their
-            # unused copies free of annotation and build-script dependencies.
-            # A real compile of such a copy must fail, rather than use empty
-            # Cargo features accidentally.
-            inactive_root = Label("//rs/private:inactive_cargo_context.rs")
-            (_rust_proc_macro if is_proc_macro else _rust_library)(
-                name = name + "__cargo_unresolved",
-                crate_name = crate_name,
-                crate_root = inactive_root,
-                srcs = [inactive_root],
-                edition = edition,
-                tags = crate_tags,
-                target_compatible_with = target_compatible_with,
-                visibility = ["//visibility:private"],
-            )
-            inactive_crate(
-                name = name + "__cargo_inactive",
-                active_crate = str(native.package_relative_label(":" + name + "__cargo_active")),
-                failed_compilation = ":" + name + "__cargo_unresolved",
-                crate_root = crate_root,
-                srcs = srcs,
-                tags = crate_tags,
-                target_compatible_with = target_compatible_with,
-            )
-
-            # The alias selects before the compiler rule's incoming transition.
-            # Apply the same Cargo setting map when choosing its active rows.
-            incoming_configurations = {}
-            for incoming in set(configurations).union(cargo_target_triple_map):
-                # The standard compiler only remaps originating execution
-                # contexts; it leaves an unset target context unchanged.
-                selected = cargo_target_triple_map.get(incoming, incoming) if incoming else incoming
-                if selected in configurations:
-                    incoming_configurations[incoming] = configurations[selected]
-            native.alias(
-                name = name,
-                actual = cargo_select(
-                    {
-                        incoming: {platform_triple: ":" + name + "__cargo_active" for platform_triple in configuration["crate_features_by_triple"]}
-                        for incoming, configuration in incoming_configurations.items()
-                    },
-                    hub_name,
-                    use_legacy_rules_rust_platforms,
-                    default = ":" + name + "__cargo_inactive",
-                ),
-                tags = crate_tags,
-                target_compatible_with = target_compatible_with,
-                visibility = crate_visibility,
-            )
 
     if binaries and has_lib:
         deps = [name] + deps
@@ -308,7 +249,7 @@ def rust_crate(
             rustc_flags = rustc_flags,
             srcs = srcs,
             tags = crate_tags,
-            target_compatible_with = active_compatible_with,
+            target_compatible_with = target_compatible_with,
             version = version,
             visibility = crate_visibility,
         )
