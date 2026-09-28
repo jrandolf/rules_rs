@@ -653,3 +653,25 @@ The resolver tests include unit graphs captured from Cargo for native and cross
 builds, a renamed procedural macro, shared host/target dependencies and selected
 macro roots. `rs/private/feature_context_fixture/refresh.py` refreshes that oracle
 using a nightly Cargo toolchain without compiling the fixture.
+
+### Restricting crate visibility
+
+Use `crate.visibility` in `MODULE.bazel` to restrict direct use of selected Cargo
+packages. Names match exactly, or by prefix with a trailing `*`. Settings apply to
+all hubs declared by the same module unless `repositories` selects specific hubs.
+Overlapping settings for a crate are rejected.
+
+```starlark
+crate.visibility(
+    crates = ["tauri", "tauri-*"],
+    repositories = ["crates"],
+    visibility = ["//apps:__subpackages__"],
+)
+```
+
+The setting covers generated libraries, procedural macros, binaries, and hub
+aliases, including versioned aliases. Labels resolve in the declaring module.
+Unconfigured crates remain public. Generated crates in the same Cargo closure
+retain access to each other so transitive dependencies still build. Package
+metadata remains public for metadata collectors. Empty or private visibility
+prevents direct workspace use while retaining that internal dependency access.

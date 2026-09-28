@@ -185,6 +185,7 @@ _RUST_CRATE_MACRO_CALL = """{indent}rust_crate(
 {indent}    crate_name = {crate_name},
 {indent}    purl = {purl},
 {indent}    version = {version},
+{indent}    crate_visibility = {crate_visibility},
 {indent}    deps = [
 {indent}        {deps}
 {indent}    ]{extra_deps},
@@ -245,6 +246,7 @@ def render_rust_crate_call(attr, values, bazel_metadata = {}, extra_deps = "", i
     skip_deps_verification_attr = "%s    skip_deps_verification = True,\n" % indent if skip_deps_verification else ""
 
     return _RUST_CRATE_MACRO_CALL.format(
+        crate_visibility = repr(getattr(attr, "crate_visibility", ["//visibility:public"])),
         indent = indent,
         deps = list_indent.join(['"%s"' % d for d in sorted(deps)]),
         extra_deps = extra_deps,
@@ -289,6 +291,7 @@ load("@rules_rs//rs:rust_binary.bzl", "rust_binary")
     ) + additive_build_file_content
 
 rust_crate_attrs = {
+    "crate_visibility": attr.string_list(default = ["//visibility:public"]),
     "hub_name": attr.string(),
     "gen_build_script": attr.string(),
     "build_script_data": attr.label_list(),

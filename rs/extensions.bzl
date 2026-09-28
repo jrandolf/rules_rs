@@ -27,6 +27,7 @@ load("//rs/private:registry_utils.bzl", "CRATES_IO_REGISTRY", "registry_config_r
 load("//rs/private:repository_utils.bzl", "render_select")
 load("//rs/private:select_utils.bzl", "platform_label")
 load("//rs/private:toml2json.bzl", "run_toml2json")
+load("//rs/private:visibility.bzl", "visibility_for")
 
 def _spoke_repo(hub_name, name, version):
     s = "%s__%s-%s" % (hub_name, name, version)
@@ -125,6 +126,7 @@ def _generate_hub_and_spokes(
         root_features = {},
         include_dev = True,
         default_features = True,
+        visibilities = [],
         dry_run = False):
     """Generates repositories for the transitive closure of the Cargo workspace.
 
@@ -143,6 +145,7 @@ def _generate_hub_and_spokes(
         validate_lockfile (bool): If true, validate we have appropriate versions in Cargo.lock
         debug (bool): Enable debug logging
         generate_lint_config (bool): Generate per-package Cargo lint configuration.
+        visibilities: Visibility tags from the declaring module.
         dry_run (bool): Run all computations but do not create repos. Useful for benchmarking.
     """
     _date(mctx, "start")
@@ -358,6 +361,21 @@ def _generate_hub_and_spokes(
 
     use_home_cargo_credentials = bool(cargo_credentials)
 
+    # Generated crates must remain able to depend on each other even when their
+    # use from the consuming workspace is restricted. Include the real Git
+    # checkout repositories, not just their metadata spokes.
+    internal_packages = {"@%s//:__pkg__" % hub_name: True}
+    for package in packages:
+        source = package["source"]
+        if source.startswith("git+"):
+            remote, commit = parse_git_url(source)
+            repo_name = _external_repo_for_git_source(hub_name, remote, commit)
+        else:
+            repo_name = _spoke_repo(hub_name, package["name"], package["version"])
+        label = "@%s//:__subpackages__" % repo_name
+        internal_packages[label] = True
+    internal_packages = internal_packages.keys()
+
     for package in packages:
         crate_name = package["name"]
         version = package["version"]
@@ -393,6 +411,7 @@ crate.annotation(
         crate_configurations = configurations_by_crate[_fq_crate(crate_name, version)]
         kwargs = dict(
             hub_name = hub_name,
+            crate_visibility = visibility_for(visibilities, hub_name, crate_name, internal_packages),
             gen_build_script = annotation.gen_build_script,
             cargo_target_triple_map = crate_configurations.cargo_target_triple_map,
             configurations = json.encode(crate_configurations.configurations),
@@ -529,6 +548,7 @@ crate.annotation(
         "cargo_config_settings(%r, %r, %r)" % (sorted(cargo_target_triples), sorted(set(platform_triples + SUPPORTED_EXEC_TRIPLES)), use_legacy_rules_rust_platforms),
     ]
     for name, versions in versions_by_name.items():
+        crate_visibility = visibility_for(visibilities, hub_name, name, internal_packages)
         for version in versions:
             annotation = annotation_for(annotations, name, version, hub_name)
             package = package_by_fq[_fq_crate(name, version)]
@@ -539,21 +559,25 @@ crate.annotation(
 alias(
     name = "{name}-{version}",
     actual = "{actual}",
-)""".format(name = name, version = version, actual = _target_label(target_repo_name, target_package_path, name)))
+    visibility = {visibility},
+)""".format(visibility = crate_visibility, name = name, version = version, actual = _target_label(target_repo_name, target_package_path, name)))
 
             for binary in annotation.gen_binaries:
                 hub_contents.append("""
 alias(
     name = "{name}-{version}__{binary}",
     actual = "{actual}",
-)""".format(name = name, version = version, binary = binary, actual = _target_label(target_repo_name, target_package_path, binary + "__bin")))
+    visibility = {visibility},
+)""".format(visibility = crate_visibility, name = name, version = version, binary = binary, actual = _target_label(target_repo_name, target_package_path, binary + "__bin")))
 
             for alias_name, target in sorted(annotation.extra_aliased_targets.items()):
                 hub_contents.append("""
 alias(
     name = "{alias_name}-{version}",
     actual = "{actual}",
+    visibility = {visibility},
 )""".format(
+                    visibility = crate_visibility,
                     alias_name = alias_name,
                     version = version,
                     actual = _target_label(target_repo_name, target_package_path, target),
@@ -569,14 +593,16 @@ alias(
 alias(
     name = "{name}",
     actual = ":{fq}",
-)""".format(name = name, fq = fq))
+    visibility = {visibility},
+)""".format(visibility = crate_visibility, name = name, fq = fq))
 
             for binary in annotation.gen_binaries:
                 hub_contents.append("""
 alias(
     name = "{name}__{binary}",
     actual = ":{fq}__{binary}",
-)""".format(name = name, fq = fq, binary = binary))
+    visibility = {visibility},
+)""".format(visibility = crate_visibility, name = name, fq = fq, binary = binary))
 
         if len(versions) == 1:
             version = versions[0]
@@ -586,7 +612,9 @@ alias(
 alias(
     name = "{alias_name}",
     actual = ":{alias_name}-{version}",
+    visibility = {visibility},
 )""".format(
+                    visibility = crate_visibility,
                     alias_name = alias_name,
                     version = version,
                 ))
@@ -896,9 +924,9 @@ def _crate_impl(mctx):
 
             if cfg.debug:
                 for _ in range(25):
-                    _generate_hub_and_spokes(mctx, cfg.name, annotations, suggested_annotation_snippet_paths, cargo_path, cfg.cargo_lock, cargo_toml_by_hub_name[cfg.name], hub_packages, cfg.platform_triples, cargo_credentials, effective_cargo_config, cfg.validate_lockfile, cfg.debug, cfg.generate_lint_config, cfg.use_legacy_rules_rust_platforms, root_packages = cfg.packages, root_features = cfg.features, include_dev = cfg.include_dev, default_features = cfg.default_features, dry_run = True)
+                    _generate_hub_and_spokes(mctx, cfg.name, annotations, suggested_annotation_snippet_paths, cargo_path, cfg.cargo_lock, cargo_toml_by_hub_name[cfg.name], hub_packages, cfg.platform_triples, cargo_credentials, effective_cargo_config, cfg.validate_lockfile, cfg.debug, cfg.generate_lint_config, cfg.use_legacy_rules_rust_platforms, visibilities = mod.tags.visibility, root_packages = cfg.packages, root_features = cfg.features, include_dev = cfg.include_dev, default_features = cfg.default_features, dry_run = True)
 
-            facts |= _generate_hub_and_spokes(mctx, cfg.name, annotations, suggested_annotation_snippet_paths, cargo_path, cfg.cargo_lock, cargo_toml_by_hub_name[cfg.name], hub_packages, cfg.platform_triples, cargo_credentials, effective_cargo_config, cfg.validate_lockfile, cfg.debug, cfg.generate_lint_config, cfg.use_legacy_rules_rust_platforms, root_packages = cfg.packages, root_features = cfg.features, include_dev = cfg.include_dev, default_features = cfg.default_features)
+            facts |= _generate_hub_and_spokes(mctx, cfg.name, annotations, suggested_annotation_snippet_paths, cargo_path, cfg.cargo_lock, cargo_toml_by_hub_name[cfg.name], hub_packages, cfg.platform_triples, cargo_credentials, effective_cargo_config, cfg.validate_lockfile, cfg.debug, cfg.generate_lint_config, cfg.use_legacy_rules_rust_platforms, visibilities = mod.tags.visibility, root_packages = cfg.packages, root_features = cfg.features, include_dev = cfg.include_dev, default_features = cfg.default_features)
 
     # Lay down the git repos with generated per-crate BUILD overlays.
     git_repos = {}
@@ -1201,6 +1229,15 @@ _annotation_select = tag_class(
     } | _ANNOTATION_SELECTABLE_ATTRS,
 )
 
+_visibility = tag_class(
+    doc = "Visibility of generated crates and hub aliases. Generated dependencies remain accessible within the Cargo closure; package metadata remains public.",
+    attrs = {
+        "crates": attr.string_list(mandatory = True, doc = "Exact Cargo names or prefixes ending in *; overlapping settings are rejected."),
+        "repositories": attr.string_list(doc = "Hub names. Empty applies to every hub declared by this module."),
+        "visibility": attr.label_list(mandatory = True, doc = "Allowed consumer packages or package groups. Labels resolve in the declaring module."),
+    },
+)
+
 crate = module_extension(
     implementation = _crate_impl,
     tag_classes = {
@@ -1208,6 +1245,7 @@ crate = module_extension(
         "annotation_select": _annotation_select,
         "config": _config,
         "from_cargo": _from_cargo,
+        "visibility": _visibility,
     },
 )
 

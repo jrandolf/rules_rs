@@ -40,7 +40,8 @@ def rust_crate(
         use_legacy_rules_rust_platforms,
         extra_compile_data = [],
         rustc_env = {},
-        skip_deps_verification = False):
+        skip_deps_verification = False,
+        crate_visibility = ["//visibility:public"]):
     crate_name = crate_name or name.replace("-", "_")
     package_metadata_name = name + "_package_metadata"
     package_metadata(
@@ -165,7 +166,7 @@ def rust_crate(
             name = name,
             tags = crate_tags,
             target_compatible_with = ["@platforms//:incompatible"],
-            visibility = ["//visibility:public"],
+            visibility = crate_visibility,
         )
     else:
         kwargs = dict(
@@ -188,7 +189,7 @@ def rust_crate(
             target_compatible_with = target_compatible_with,
             package_metadata = [package_metadata_name],
             skip_deps_verification = skip_deps_verification,
-            visibility = ["//visibility:public"],
+            visibility = crate_visibility,
             skip_per_crate_rustc_flags = True,
         )
 
@@ -221,5 +222,5 @@ def rust_crate(
             tags = crate_tags,
             target_compatible_with = target_compatible_with,
             version = version,
-            visibility = ["//visibility:public"],
+            visibility = crate_visibility,
         )
