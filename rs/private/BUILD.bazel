@@ -11,6 +11,7 @@ load(":cargo_toml_utils_test.bzl", "cargo_toml_utils_tests")
 load(":cargo_workspace_graph_test.bzl", "cargo_workspace_graph_tests")
 load(":cfg_parser_test.bzl", "cfg_parser_tests")
 load(":crate_configurations_test.bzl", "crate_configurations_tests")
+load(":downloader_test.bzl", "downloader_tests")
 load(":lint_flags_test.bzl", "lint_flags_tests")
 load(":registry_utils_test.bzl", "registry_utils_tests")
 load(":repository_utils_test.bzl", "repository_utils_tests")
@@ -54,6 +55,8 @@ cargo_toml_utils_tests()
 cargo_workspace_graph_tests()
 
 cfg_parser_tests()
+
+downloader_tests()
 
 crate_configurations_tests()
 
@@ -539,6 +542,15 @@ bzl_library(
     srcs = ["repository_utils_test.bzl"],
     deps = [
         ":repository_utils",
+        "@bazel_skylib//lib:unittest",
+    ],
+)
+
+bzl_library(
+    name = "downloader_test",
+    srcs = ["downloader_test.bzl"],
+    deps = [
+        ":downloader",
         "@bazel_skylib//lib:unittest",
     ],
 )

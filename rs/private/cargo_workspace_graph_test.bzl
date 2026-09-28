@@ -1,5 +1,5 @@
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
-load(":cargo_workspace_graph.bzl", "cargo_toml_dependencies", "compute_package_dep_versions", "new_feature_resolutions", "resolve_cargo_workspace_members", "resolve_packages", "select_package_dep_version", "split_lockfile_packages")
+load(":cargo_workspace_graph.bzl", "cargo_toml_dependencies", "cargo_toml_fact", "compute_package_dep_versions", "new_feature_resolutions", "resolve_cargo_workspace_members", "resolve_packages", "select_package_dep_version", "split_lockfile_packages")
 load(":resolver.bzl", "resolve")
 
 def _select_package_dep_version_impl(ctx):
