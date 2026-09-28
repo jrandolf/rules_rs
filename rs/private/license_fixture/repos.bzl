@@ -48,8 +48,8 @@ _hub = repository_rule(implementation = _hub_impl)
 
 def _fixtures_impl(_mctx):
     _hub(name = "license_hub")
-    _registry(name = "license_registry", hub_name = "license_hub")
-    git_crate_metadata_repository(name = "license_hub__member-0.1.0", hub_name = "license_hub", package_name = "member", package_version = "0.1.0", purl = "pkg:cargo/member@0.1.0")
+    _registry(name = "license_registry", configurations = "{}", hub_name = "license_hub")
+    git_crate_metadata_repository(name = "license_hub__member-0.1.0", configurations = "{}", hub_name = "license_hub", package_name = "member", package_version = "0.1.0", purl = "pkg:cargo/member@0.1.0")
     _checkout(name = "license_checkout", hub_name = "license_hub")
 
 fixtures = module_extension(implementation = _fixtures_impl)

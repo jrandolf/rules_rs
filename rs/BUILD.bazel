@@ -63,6 +63,7 @@ bzl_library(
         "//rs/platforms:triples",
         "//rs/private:annotations",
         "//rs/private:cargo_credentials",
+        "//rs/private:cargo_integration",
         "//rs/private:cargo_workspace_graph",
         "//rs/private:crate_configurations",
         "//rs/private:crate_repository",
@@ -149,5 +150,19 @@ bzl_library(
     deps = [
         "@bazel_features//:features",
         "@rules_rust//rust:bzl_lib",
+    ],
+)
+
+bzl_library(
+    name = "testing",
+    testonly = True,
+    srcs = ["testing.bzl"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//rs/private:cargo_workspace_graph",
+        "//rs/private:cfg_parser",
+        "//rs/private:repository_utils",
+        "//rs/private:source_patches",
+        "//rs/private:visibility",
     ],
 )

@@ -5,6 +5,23 @@ load("//rs/private:resolver.bzl", "collect_exec_build_dependencies", "resolve")
 load("//rs/private:select_utils.bzl", "shared_and_per_platform")
 load("//rs/private:semver.bzl", "select_matching_version")
 
+def locked_packages(cargo_lock):
+    """Reject identities the name/version-keyed resolver cannot distinguish."""
+    if cargo_lock.get("version") not in [3, 4]:
+        fail("rules_rs supports Cargo.lock versions 3 and 4")
+    identities = {}
+    packages = cargo_lock.get("package", [])
+    for package in packages:
+        fq = fq_crate(package["name"], package["version"])
+        identity = package.get("source") or "path"
+        if fq in identities:
+            if identities[fq] != identity:
+                fail("rules_rs cannot distinguish same-name/version packages from different sources: " + fq)
+            fail("Duplicate Cargo.lock package: " + fq)
+        identities[fq] = identity
+        package["lock_source"] = package.get("source")
+    return packages
+
 def fq_crate(name, version):
     return name + "-" + version
 

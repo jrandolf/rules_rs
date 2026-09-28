@@ -1,7 +1,7 @@
 load("@package_metadata//licenses:defs.bzl", "license", "license_kind")
 load("@package_metadata//rules:package_metadata.bzl", "package_metadata")
 load(
-    "@rules_rust//rust/private:rust.bzl",
+    "@rules_rust//rust:defs.bzl",
     _rust_library = "rust_library",
     _rust_proc_macro = "rust_proc_macro",
 )
@@ -44,7 +44,10 @@ def rust_crate(
         extra_compile_data = [],
         rustc_env = {},
         skip_deps_verification = False,
-        crate_visibility = ["//visibility:public"]):
+        crate_visibility = ["//visibility:public"],
+        proc_macro_labels = []):
+    if allow_build_script_to_detect_nonhermetic_paths:
+        fail("The selected compiler rules do not support nonhermetic build-script paths")
     crate_name = crate_name or name.replace("-", "_")
     package_metadata_name = name + "_package_metadata"
     license_attributes = []
@@ -85,7 +88,10 @@ def rust_crate(
             cargo_target_triple: {platform_triple: list(deps) for platform_triple, deps in configuration["deps_by_triple"].items()}
             for cargo_target_triple, configuration in configurations.items()
         }
-    deps = deps + cargo_select(resolved_deps, hub_name, use_legacy_rules_rust_platforms, default = [])
+    macro_labels = {native.package_relative_label(label): True for label in proc_macro_labels}
+    macro_deps = [dep for dep in deps if native.package_relative_label(dep) in macro_labels] + cargo_select({cargo_target: {triple: [dep for dep in values if native.package_relative_label(dep) in macro_labels] for triple, values in by_triple.items()} for cargo_target, by_triple in resolved_deps.items()}, hub_name, use_legacy_rules_rust_platforms, default = [])
+    resolved_deps = {cargo_target: {triple: [dep for dep in values if native.package_relative_label(dep) not in macro_labels] for triple, values in by_triple.items()} for cargo_target, by_triple in resolved_deps.items()}
+    deps = [dep for dep in deps if native.package_relative_label(dep) not in macro_labels] + cargo_select(resolved_deps, hub_name, use_legacy_rules_rust_platforms, default = [])
     crate_features = cargo_select(
         {cargo_target_triple: configuration["crate_features_by_triple"] for cargo_target_triple, configuration in configurations.items()},
         hub_name,
@@ -96,7 +102,7 @@ def rust_crate(
         {
             cargo_target_triple: {
                 platform_triple: {
-                    dep: alias
+                    (dep + "__alias" if native.package_relative_label(dep) in macro_labels else dep): alias
                     for dep, alias in deps.items()
                     if alias
                 }
@@ -150,6 +156,7 @@ def rust_crate(
     if build_script:
         deps = deps + cargo_build_script_for_configurations(
             configurations = configurations,
+            proc_macro_labels = proc_macro_labels,
             hub_name = hub_name,
             name = "_bs",
             use_legacy_rules_rust_platforms = use_legacy_rules_rust_platforms,
@@ -161,13 +168,12 @@ def rust_crate(
             data = compile_data + build_script_data,
             link_deps = deps,
             build_script_env = build_script_env,
-            allow_build_script_to_detect_nonhermetic_paths = allow_build_script_to_detect_nonhermetic_paths,
             build_script_env_files = build_script_env_files,
             toolchains = build_script_toolchains,
             tools = build_script_tools,
             edition = edition,
             pkg_name = crate_name,
-            rustc_env = rustc_env,
+            rustc_env = rustc_env | {"CARGO_CRATE_NAME": "build_script_build"},
             rustc_env_files = ["cargo_toml_env_vars.env"],
             rustc_flags = ["--cap-lints=allow"],
             srcs = srcs,
@@ -195,6 +201,7 @@ def rust_crate(
             compile_data = compile_data,
             aliases = aliases,
             deps = deps,
+            proc_macro_deps = macro_deps,
             data = data,
             crate_features = crate_features,
             crate_root = crate_root,
@@ -205,9 +212,7 @@ def rust_crate(
             tags = crate_tags,
             target_compatible_with = target_compatible_with,
             package_metadata = [package_metadata_name],
-            skip_deps_verification = skip_deps_verification,
             visibility = crate_visibility,
-            skip_per_crate_rustc_flags = True,
         )
 
         if is_proc_macro:
@@ -223,10 +228,12 @@ def rust_crate(
     for binary, crate_root in binaries.items():
         rust_binary(
             name = binary + "__bin",
+            cargo_bin_name = binary,
             cargo_target_triple_map = cargo_target_triple_map,
             compile_data = compile_data,
             aliases = aliases,
             deps = deps,
+            proc_macro_deps = macro_deps,
             link_deps = link_deps,
             data = data,
             crate_features = crate_features,

@@ -1,5 +1,6 @@
 """Repository fixtures for the post-checkout Git workspace generation path."""
 
+load("//rs/platforms:triples.bzl", "SUPPORTED_EXEC_TRIPLES")
 load("//rs/private:git_cargo_workspace_repository.bzl", "render_crate_build_file")
 load("//rs/private:git_crate_metadata_repository.bzl", "git_crate_metadata_repository")
 load("//rs/private:git_workspace_resources.bzl", "declare_workspace_resources", "workspace_resource_build_files")
@@ -24,17 +25,17 @@ pub const LINK: &str = include_str!("../../alias/schema.txt");
     render_crate_build_file(rctx, "member/BUILD.bazel", "", [], {"workspace": {}})
     declare_workspace_resources(rctx, files)
 
-_checkout = repository_rule(implementation = _checkout_impl, attrs = {"hub_name": attr.string()})
+_checkout = repository_rule(implementation = _checkout_impl, attrs = {"hub_name": attr.string(), "workspace_cargo_toml": attr.string(default = "Cargo.toml")})
 
 def _hub_impl(rctx):
     rctx.file("defs.bzl", "RESOLVED_PLATFORMS = []\n")
-    rctx.file("BUILD.bazel", 'exports_files(["defs.bzl"])\n')
+    rctx.file("BUILD.bazel", 'load("@rules_rs//rs/private:cargo_select.bzl", "cargo_config_settings")\ncargo_config_settings([""], %r)\nexports_files(["defs.bzl"])\n' % SUPPORTED_EXEC_TRIPLES)
 
 _hub = repository_rule(implementation = _hub_impl)
 
 def _fixtures_impl(_mctx):
     _hub(name = "resource_hub")
-    git_crate_metadata_repository(name = "resource_hub__member-0.1.0", hub_name = "resource_hub", package_name = "member", package_version = "0.1.0", purl = "pkg:cargo/member@0.1.0")
+    git_crate_metadata_repository(name = "resource_hub__member-0.1.0", configurations = json.encode({"": {"deps_by_triple": {t: {} for t in SUPPORTED_EXEC_TRIPLES}, "crate_features_by_triple": {t: [] for t in SUPPORTED_EXEC_TRIPLES}}}), hub_name = "resource_hub", package_name = "member", package_version = "0.1.0", purl = "pkg:cargo/member@0.1.0")
     _checkout(name = "resource_checkout", hub_name = "resource_hub")
 
 fixtures = module_extension(implementation = _fixtures_impl)

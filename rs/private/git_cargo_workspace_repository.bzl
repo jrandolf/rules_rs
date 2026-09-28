@@ -3,6 +3,7 @@ load("@bazel_tools//tools/build_defs/repo:git_worker.bzl", "git_repo")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "patch")
 load(":git_workspace_resources.bzl", "declare_workspace_resources", "workspace_resource_build_files")
 load(":repository_utils.bzl", "cargo_build_file_values", "inherit_workspace_package_fields", "workspace_package_prefix")
+load(":source_patches.bzl", "validate_source_patches")
 load(":toml2json.bzl", "run_toml2json")
 
 def _render_label_list(labels):
@@ -74,6 +75,7 @@ crate(
 def _git_cargo_workspace_repository_impl(rctx):
     git_repo(rctx, rctx.path("."))
 
+    validate_source_patches(rctx, rctx.attr.patches, rctx.attr.patch_args)
     patch(rctx)
     rctx.delete(rctx.path(".git"))
 
@@ -93,7 +95,7 @@ git_cargo_workspace_repository = repository_rule(
         "commit": attr.string(mandatory = True),
         "hub_name": attr.string(mandatory = True),
         "shallow_since": attr.string(),
-        "init_submodules": attr.bool(default = True),
+        "init_submodules": attr.bool(default = False),
         "build_files": attr.string_dict(mandatory = True),
         "gen_binaries": attr.string_list_dict(default = {}),
         "workspace_cargo_toml": attr.string(default = "Cargo.toml"),
@@ -101,7 +103,7 @@ git_cargo_workspace_repository = repository_rule(
         "patches": attr.label_list(default = []),
         "patch_strip": attr.int(default = 0),
         "patch_tool": attr.string(default = ""),
-        "recursive_init_submodules": attr.bool(default = True),
+        "recursive_init_submodules": attr.bool(default = False),
         "verbose": attr.bool(default = False),
     },
 )

@@ -2,11 +2,11 @@
 
 def _rules_rust_repository_impl(rctx):
     rctx.download_and_extract(
-        integrity = "sha256-4rVCuxSPIKiAS0uLQ6IILyL6bYR5ypYtuKTttXi5VMg=",
-        stripPrefix = "rules_rust-fd521efe16c03e4cd169453eb44fb98d73ebb7aa",
-        url = "https://github.com/hermeticbuild/rules_rust/releases/download/source-fd521efe16c03e4cd169453eb44fb98d73ebb7aa/rules_rust-fd521efe16c03e4cd169453eb44fb98d73ebb7aa.tar.gz",
+        sha256 = "cf5cff8a0eee75a61132baf45e789a7af652298a3937b2579bee6c09e5ea5413",
+        stripPrefix = "rules_rust-20e4db56fa77ffcaca124d9f9ff65914cecbf192",
+        url = "https://codeload.github.com/jrandolf/rules_rust/tar.gz/20e4db56fa77ffcaca124d9f9ff65914cecbf192",
+        type = "tar.gz",
     )
-    rctx.patch(rctx.attr._cargo_context_patch, strip = 1)
     for patch in rctx.attr.patches:
         rctx.patch(patch, strip = rctx.attr.patch_strip)
 
@@ -15,7 +15,6 @@ _rules_rust_repository = repository_rule(
     attrs = {
         "patches": attr.label_list(),
         "patch_strip": attr.int(),
-        "_cargo_context_patch": attr.label(default = "//rs/patches:rules_rust_cargo_context.patch"),
     },
 )
 

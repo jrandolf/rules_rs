@@ -10,6 +10,7 @@ def cargo_build_script_for_configurations(
         name,
         configurations,
         hub_name,
+        proc_macro_labels = [],
         preserve_cargo_target_triple = False,
         crate_features = [],
         deps = [],
@@ -75,20 +76,24 @@ def cargo_build_script_for_configurations(
             ]
         if hub_name:
             script_kwargs["cargo_target_triple_map"] = {cargo_target_triple: variant["cargo_target_triple"] for cargo_target_triple in variant["conditions"] if cargo_target_triple != variant["cargo_target_triple"]}
-        script_deps = list(variant["deps"])
-        script_aliases = {dep: alias for dep, alias in variant["deps"].items() if alias}
+        script_macros = [dep for dep in variant["deps"] if dep in proc_macro_labels]
+        script_deps = [dep for dep in variant["deps"] if dep not in proc_macro_labels]
+        script_aliases = {(dep + "__alias" if dep in proc_macro_labels else dep): alias for dep, alias in variant["deps"].items() if alias}
         script_aliases.update(aliases)
         if variant["deps_by_platform"]:
             script_aliases = select({
-                platform: script_aliases | {dep: alias for dep, alias in items.items() if alias and dep not in aliases}
+                platform: script_aliases | {(dep + "__alias" if dep in proc_macro_labels else dep): alias for dep, alias in items.items() if alias and dep not in aliases}
                 for platform, items in variant["deps_by_platform"].items()
             } | {"//conditions:default": script_aliases})
             script_deps = script_deps + select({
-                platform: list(items)
+                platform: [dep for dep in items if dep not in proc_macro_labels]
                 for platform, items in variant["deps_by_platform"].items()
             } | {"//conditions:default": []})
+        if variant["deps_by_platform"]:
+            script_macros = script_macros + select({platform: [dep for dep in items if dep in proc_macro_labels] for platform, items in variant["deps_by_platform"].items()} | {"//conditions:default": []})
         cargo_build_script(
             name = script_name,
+            proc_macro_deps = script_macros,
             crate_features = crate_features + variant["crate_features"],
             deps = deps + script_deps if deps else script_deps,
             aliases = script_aliases,
