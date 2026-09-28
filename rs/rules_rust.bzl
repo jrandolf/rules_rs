@@ -1,6 +1,23 @@
 """Module extension that provisions the rules_rust repository."""
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+def _rules_rust_repository_impl(rctx):
+    rctx.download_and_extract(
+        integrity = "sha256-4rVCuxSPIKiAS0uLQ6IILyL6bYR5ypYtuKTttXi5VMg=",
+        stripPrefix = "rules_rust-fd521efe16c03e4cd169453eb44fb98d73ebb7aa",
+        url = "https://github.com/hermeticbuild/rules_rust/releases/download/source-fd521efe16c03e4cd169453eb44fb98d73ebb7aa/rules_rust-fd521efe16c03e4cd169453eb44fb98d73ebb7aa.tar.gz",
+    )
+    rctx.patch(rctx.attr._cargo_context_patch, strip = 1)
+    for patch in rctx.attr.patches:
+        rctx.patch(patch, strip = rctx.attr.patch_strip)
+
+_rules_rust_repository = repository_rule(
+    implementation = _rules_rust_repository_impl,
+    attrs = {
+        "patches": attr.label_list(),
+        "patch_strip": attr.int(),
+        "_cargo_context_patch": attr.label(default = "//rs/patches:rules_rust_cargo_context.patch"),
+    },
+)
 
 _patch = tag_class(
     doc = "Additional patches to apply to the pinned rules_rust archive.",
@@ -29,11 +46,8 @@ def _rules_rust_impl(mctx):
 
     strip = list(strip_values)[0] if strip_values else 0
 
-    http_archive(
+    _rules_rust_repository(
         name = "rules_rust",
-        integrity = "sha256-4rVCuxSPIKiAS0uLQ6IILyL6bYR5ypYtuKTttXi5VMg=",
-        strip_prefix = "rules_rust-fd521efe16c03e4cd169453eb44fb98d73ebb7aa",
-        url = "https://github.com/hermeticbuild/rules_rust/releases/download/source-fd521efe16c03e4cd169453eb44fb98d73ebb7aa/rules_rust-fd521efe16c03e4cd169453eb44fb98d73ebb7aa.tar.gz",
         patches = patches,
         patch_strip = strip,
     )
