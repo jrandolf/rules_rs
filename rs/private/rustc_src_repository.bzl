@@ -11,7 +11,7 @@ load(
     "resolve_packages",
     "split_lockfile_packages",
 )
-load("//rs/private:repository_utils.bzl", "cargo_build_file_values", "inherit_workspace_package_fields", "render_rust_crate_call")
+load("//rs/private:repository_utils.bzl", "cargo_build_file_values", "inherit_workspace_package_fields", "render_rust_crate_call", "workspace_package_prefix")
 load("//rs/private:rust_repository_utils.bzl", "DEFAULT_STATIC_RUST_URL_TEMPLATES")
 load("//rs/private:toml2json.bzl", "run_toml2json")
 
@@ -120,7 +120,7 @@ def _crate_attr(feature_resolutions, extra_compile_data = []):
 
 def _write_crate_build_file(rctx, bazel_package, workspace_cargo_toml, crate_attr):
     cargo_toml = run_toml2json(rctx, paths.join(bazel_package, "Cargo.toml"))
-    cargo_toml = inherit_workspace_package_fields(cargo_toml, workspace_cargo_toml, paths.relativize(paths.join(_SOURCE_ROOT, "library"), bazel_package))
+    cargo_toml = inherit_workspace_package_fields(cargo_toml, workspace_cargo_toml, workspace_package_prefix(paths.join(_SOURCE_ROOT, "library"), bazel_package))
     package = cargo_toml["package"]
     cargo = cargo_build_file_values(
         rctx,
