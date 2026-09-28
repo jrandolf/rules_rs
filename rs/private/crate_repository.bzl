@@ -14,8 +14,8 @@ def _cargo_purl(package_name, version, qualifiers = {}):
         ])
     return purl
 
-def _generate_build_file(rctx, cargo_toml, purl_qualifiers = {}, package_path = ""):
-    cargo = cargo_build_file_values(rctx, cargo_toml, rctx.attr.gen_binaries, package_path = package_path)
+def _generate_build_file(rctx, cargo_toml, purl_qualifiers = {}):
+    cargo = cargo_build_file_values(rctx, cargo_toml, rctx.attr.gen_binaries)
     package = cargo_toml["package"]
     version = package_version(package)
     values = dict(cargo.values)
