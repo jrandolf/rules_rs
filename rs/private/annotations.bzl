@@ -32,6 +32,7 @@ def _crate_annotation(
         patch_args = [],
         patch_tool = None,
         patches = [],
+        source = "",
         strip_prefix = None,
         visibility = [Label("//visibility:public")],
         workspace_cargo_toml = "Cargo.toml"):
@@ -67,6 +68,7 @@ def _crate_annotation(
         patch_args = patch_args,
         patch_tool = patch_tool,
         patches = patches,
+        source = source,
         strip_prefix = strip_prefix,
         visibility = visibility,
         workspace_cargo_toml = workspace_cargo_toml,

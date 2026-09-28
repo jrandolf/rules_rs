@@ -3,6 +3,7 @@ load("@bazel_tools//tools/build_defs/repo:utils.bzl", "get_auth", "patch")
 load(":cargo_credentials.bzl", "load_cargo_credentials", "registry_auth_headers")
 load(":registry_utils.bzl", "registry_download_url_from_template")
 load(":repository_utils.bzl", "cargo_build_file_values", "common_attrs", "package_version", "render_build_file_content")
+load(":source_patches.bzl", "validate_source_patches")
 load(":toml2json.bzl", "run_toml2json")
 
 def _cargo_purl(package_name, version, qualifiers = {}):
@@ -58,6 +59,7 @@ def _crate_repository_impl(rctx):
         auth = auth,
     )
 
+    validate_source_patches(rctx, rctx.attr.patches, rctx.attr.patch_args)
     patch(rctx)
 
     cargo_toml = run_toml2json(rctx, "Cargo.toml")
@@ -91,6 +93,7 @@ def _local_crate_repository_impl(rctx):
     for entry in root.readdir():
         rctx.symlink(entry, entry.basename)
 
+    validate_source_patches(rctx, rctx.attr.patches, rctx.attr.patch_args)
     patch(rctx)
 
     cargo_toml = run_toml2json(rctx, "Cargo.toml")

@@ -1,6 +1,6 @@
 """Rule that provides LintsInfo from pre-computed lint flags."""
 
-load("@rules_rust//rust/private:providers.bzl", "LintsInfo")
+load("@rules_rust//rust:rust_common.bzl", "LintsInfo")
 
 def _cargo_lints_impl(ctx):
     return [

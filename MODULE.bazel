@@ -5,7 +5,15 @@ module(
 
 ########### BECOME THE RULES_RUST FACADE ################
 rules_rust = use_extension("//rs:rules_rust.bzl", "rules_rust")
-use_repo(rules_rust, "rules_rust")
+
+bazel_dep(name = "rules_rust", version = "0.74.0")
+git_override(
+    module_name = "rules_rust",
+    commit = "20e4db56fa77ffcaca124d9f9ff65914cecbf192",
+    remote = "https://github.com/jrandolf/rules_rust.git",
+)
+
+override_repo(rules_rust, "rules_rust")
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
@@ -54,6 +62,7 @@ use_repo(dev_toolchains, "default_rust_toolchains")
     ]
 ]
 
+bazel_dep(name = "toml.bzl", version = "0.4.1")
 bazel_dep(name = "bazel_lib", version = "3.0.0")
 bazel_dep(name = "bazel_features", version = "1.45.0")
 bazel_dep(name = "bazel_skylib", version = "1.4.1")
@@ -196,18 +205,20 @@ bazel_dep(name = "gazelle", version = "0.47.0", dev_dependency = True)
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.8.2", dev_dependency = True)
 bazel_dep(name = "buildifier_prebuilt", version = "6.1.2", dev_dependency = True)
 
+compiler = use_extension("@rules_rust//rust:extensions.bzl", "rust", dev_dependency = True)
+compiler.toolchain(
+    edition = "2021",
+    versions = ["1.92.0"],
+)
+use_repo(compiler, "rust_toolchains")
+
 register_toolchains(
-    "@default_rust_toolchains//...",
+    "@rust_toolchains//:all",
     dev_dependency = True,
 )
 
-register_toolchains(
-    "@rules_rust//extensions/prost:default_prost_toolchain",
-    "@rules_rust//extensions/pyo3/toolchains:rust_toolchain",
-    "@rules_rust//extensions/pyo3/toolchains:toolchain",
-    "@rules_rust//extensions/wasm_bindgen:default_wasm_bindgen_toolchain",
-    dev_dependency = True,
-)
+# The standard compiler fork supplies extension rules as separate modules.
+# Consumers register the extension toolchains they use.
 
 register_toolchains(
     "@llvm//toolchain:all",

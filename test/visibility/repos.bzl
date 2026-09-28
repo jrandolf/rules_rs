@@ -16,7 +16,7 @@ RESOLVED_PLATFORMS = []
         "crate_name": repr(crate_name),
         "purl": repr("pkg:cargo/sample@1.0.0"),
         "version": repr("1.0.0"),
-        "binaries": repr({} if rctx.attr.macro else {"probe": "main.rs"}),
+        "binaries": repr({} if rctx.attr.macro else {"cargo-probe": "main.rs"}),
         "build_script": "None",
         "crate_root": repr("lib.rs"),
         "edition": repr("2021"),

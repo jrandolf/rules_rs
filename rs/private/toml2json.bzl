@@ -1,10 +1,6 @@
-load("@bazel_lib//lib:repo_utils.bzl", "repo_utils")
+"""Read Cargo manifests, including TOML 1.1 multiline inline tables."""
+
+load("@toml.bzl", "toml")
 
 def run_toml2json(ctx, toml_file):
-    toml2json = "@toml2json_%s//file:downloaded" % repo_utils.platform(ctx)
-
-    result = ctx.execute([Label(toml2json), toml_file])
-    if result.return_code != 0:
-        fail(result.stdout + result.stderr)
-
-    return json.decode(result.stdout)
+    return toml.decode(ctx.read(toml_file))

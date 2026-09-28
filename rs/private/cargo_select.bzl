@@ -1,5 +1,6 @@
 """Select Cargo attributes by resolution and compilation platform."""
 
+load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@rules_rust//rust/platform:triple_mappings.bzl", _legacy_constraints = "triple_to_constraint_set")
 load("//rs/platforms:triples.bzl", "triple_to_rust_constraint_set")
 load(":select_utils.bzl", "platform_label")
@@ -18,12 +19,25 @@ def cargo_config_settings(cargo_target_triples, platform_triples, use_legacy_rul
         else:
             constraints = triple_to_rust_constraint_set(platform_triple)
         for cargo_target_triple in cargo_target_triples:
+            name = "__cargo/" + (cargo_target_triple or "default") + "/" + platform_triple
             native.config_setting(
-                name = "__cargo/" + (cargo_target_triple or "default") + "/" + platform_triple,
+                name = name if cargo_target_triple else name + "/shared",
                 flag_values = {_SETTING: cargo_target_triple},
                 constraint_values = constraints,
                 visibility = ["//visibility:public"],
             )
+            if not cargo_target_triple:
+                native.config_setting(
+                    name = name + "/target",
+                    flag_values = {_SETTING: "target/" + platform_triple},
+                    constraint_values = constraints,
+                    visibility = ["//visibility:public"],
+                )
+                selects.config_setting_group(
+                    name = name,
+                    match_any = [name + "/shared", name + "/target"],
+                    visibility = ["//visibility:public"],
+                )
 
 def cargo_select(values, hub_name, use_legacy_rules_rust_platforms = False, default = None):
     """Select values[cargo_target_triple][platform_triple], preserving legacy platform precedence."""

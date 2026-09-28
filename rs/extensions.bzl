@@ -7,6 +7,7 @@ load("//rs/private:cargo_credentials.bzl", "load_cargo_credentials", "registry_a
 load(
     "//rs/private:cargo_workspace_graph.bzl",
     "cargo_toml_fact",
+    "locked_packages",
     "render_dep_data",
     "resolve_cargo_workspace_members",
     "resolve_packages",
@@ -28,6 +29,7 @@ load("//rs/private:repository_utils.bzl", "render_select")
 load("//rs/private:select_utils.bzl", "platform_label")
 load("//rs/private:toml2json.bzl", "run_toml2json")
 load("//rs/private:visibility.bzl", "visibility_with_internal_access")
+load("//rs/private:workspace_index.bzl", "workspace_index")
 
 def _spoke_repo(hub_name, name, version):
     s = "%s__%s-%s" % (hub_name, name, version)
@@ -40,7 +42,10 @@ def _git_repo_remote_name(remote):
     if scheme_separator != -1:
         remote = remote[scheme_separator + len("://"):]
 
-    return remote.replace("/", "_").replace(":", "_").replace("@", "_")
+    name = remote.replace("/", "_").replace(":", "_").replace("@", "_")
+
+    # The Git repository map checks the full remote and commit for collisions.
+    return name if len(name) <= 100 else name[:80] + "_" + str(hash(remote))
 
 def _external_repo_for_git_source(hub_name, remote, commit):
     return hub_name + "__" + _git_repo_remote_name(remote) + "_" + commit[:8]
@@ -130,6 +135,8 @@ def _generate_hub_and_spokes(
         debug,
         generate_lint_config,
         use_legacy_rules_rust_platforms,
+        target_hosts = {},
+        workspace_library_target = "",
         root_packages = [],
         root_features = {},
         include_dev = True,
@@ -188,6 +195,7 @@ def _generate_hub_and_spokes(
         name = package["name"]
         version = package["version"]
         source = package["source"]
+        mctx.report_progress("Reading locked package " + name + " " + version)
 
         if source.startswith("sparse+"):
             key = name + "_" + version
@@ -363,6 +371,8 @@ def _generate_hub_and_spokes(
         workspace_crates = workspace_crates,
     )
 
+    proc_macro_labels = ["@%s//:%s" % (hub_name, fq) for fq, fact in facts_by_fq_crate.items() if fact.get("proc_macro")]
+
     mctx.report_progress("Initializing spokes")
 
     use_home_cargo_credentials = bool(cargo_credentials)
@@ -387,6 +397,8 @@ def _generate_hub_and_spokes(
         source = package["source"]
 
         annotation = annotation_for(annotations, crate_name, version, hub_name)
+        if annotation.source and annotation.source != package.get("lock_source"):
+            fail("Source annotation does not match locked package %s %s: expected %s, got %s" % (crate_name, version, annotation.source, package.get("lock_source")))
         suggested_annotation = None
         if annotation.gen_build_script == "auto":
             snippet_path = suggested_annotation_snippet_paths.get(crate_name)
@@ -396,6 +408,7 @@ def _generate_hub_and_spokes(
         kwargs = dict(
             hub_name = hub_name,
             crate_visibility = visibility_with_internal_access(annotation.visibility, internal_packages),
+            proc_macro_labels = proc_macro_labels,
             gen_build_script = annotation.gen_build_script,
             cargo_target_triple_map = crate_configurations.cargo_target_triple_map,
             configurations = json.encode(crate_configurations.configurations),
@@ -502,6 +515,7 @@ def _generate_hub_and_spokes(
     workspace_lints_present = generate_lint_config and "lints" in workspace_cargo_toml_json.get("workspace", {})
     workspace_manifest_path = paths.join(repo_root, "Cargo.toml")
     lint_configs = {}
+    member_lint_configs = {}
     package_lint_targets = []
     lint_packages = cargo_metadata["packages"] if generate_lint_config else []
     for index, package in enumerate(lint_packages):
@@ -517,12 +531,15 @@ def _generate_hub_and_spokes(
         if lints.get("workspace") == True:
             if workspace_lints_present:
                 lint_configs[bazel_package] = "@%s//:workspace_cargo_lints" % hub_name
+                member_lint_configs[package_dir] = lint_configs[bazel_package]
         elif lints.get("rust") or lints.get("clippy") or lints.get("rustdoc"):
             if manifest_path == workspace_manifest_path:
                 lint_configs[bazel_package] = "@%s//:cargo_lints" % hub_name
+                member_lint_configs[package_dir] = lint_configs[bazel_package]
             else:
                 target_name = "_cargo_lints_%d" % index
                 lint_configs[bazel_package] = "@%s//:%s" % (hub_name, target_name)
+                member_lint_configs[package_dir] = lint_configs[bazel_package]
                 package_lint_targets.append((
                     target_name,
                     cargo_toml_lint_flags(cargo_toml_json),
@@ -531,12 +548,14 @@ def _generate_hub_and_spokes(
     cargo_target_triples = set()
     for crate_configurations in configurations_by_crate.values():
         cargo_target_triples.update(crate_configurations.configurations)
+    package_metadata = []
     hub_contents = [
         'load("@rules_rs//rs/private:cargo_select.bzl", "cargo_config_settings")',
+        'load("@rules_rs//rs/private:proc_macro_alias.bzl", "proc_macro_alias")',
         "cargo_config_settings(%r, %r, %r)" % (sorted(cargo_target_triples), sorted(set(platform_triples + SUPPORTED_EXEC_TRIPLES)), use_legacy_rules_rust_platforms),
     ]
     for name, versions in versions_by_name.items():
-        workspace_versions = workspace_dep_versions_by_name.get(name)
+        workspace_versions = workspace_dep_versions_by_name.get(name) or ([_fq_crate(name, versions[0])] if len(versions) == 1 else [])
         default_fq = sorted(workspace_versions)[-1] if workspace_versions else None
         for version in versions:
             fq = _fq_crate(name, version)
@@ -551,6 +570,17 @@ def _generate_hub_and_spokes(
                 _target_label(target_repo_name, target_package_path, name),
                 crate_visibility,
             ))
+            # The package's package_metadata, for supply-chain checks.
+            hub_contents.append("""
+alias(
+    name = "{name}-{version}__metadata",
+    actual = "{actual}",
+)""".format(name = name, version = version, actual = _target_label(target_repo_name, target_package_path, name + "_package_metadata")))
+            package_metadata.append("{}-{}__metadata".format(name, version))
+
+            if facts_by_fq_crate[_fq_crate(name, version)].get("proc_macro"):
+                hub_contents.append("proc_macro_alias(name = %r, actual = %r, visibility = %r)" % (name + "-" + version + "__alias", ":" + name + "-" + version, crate_visibility))
+
             for binary in annotation.gen_binaries:
                 hub_contents.append(_render_alias(
                     "%s__%s" % (fq, binary),
@@ -576,6 +606,8 @@ def _generate_hub_and_spokes(
                         ":%s__%s" % (fq, binary),
                         crate_visibility,
                     ))
+                if facts_by_fq_crate[fq].get("proc_macro"):
+                    hub_contents.append(_render_alias(name + "__alias", ":" + fq + "__alias", crate_visibility))
 
     for package in cargo_metadata["packages"]:
         package_dir = _manifest_package_dir(package["manifest_path"], repo_root)
@@ -588,7 +620,7 @@ def _generate_hub_and_spokes(
             continue
         hub_contents.append(_render_alias(
             _fq_crate(package["name"], package["version"]),
-            "@@//" + bazel_package,
+            "@@//" + bazel_package + (":" + workspace_library_target if workspace_library_target else ""),
             ["//visibility:public"],
         ))
 
@@ -609,9 +641,19 @@ filegroup(
     srcs = [
         %s
     ]%s,
+)
+
+# Every locked package's package_metadata. A filegroup forwards no providers,
+# so consumers walk its srcs with an aspect.
+filegroup(
+    name = "__package_metadata",
+    srcs = [
+        %s
+    ],
 )""" % (
             ",\n        ".join(['"%s"' % dep for dep in sorted(workspace_deps)]),
             " + " + conditional_workspace_deps if conditional_workspace_deps else "",
+            ",\n        ".join(['":%s"' % target for target in package_metadata]),
         ),
     )
 
@@ -739,9 +781,13 @@ RESOLVED_PLATFORMS = select({{
     if dry_run:
         return
 
+    index_contents = {}
+    if target_hosts:
+        index_contents["index.json"] = json.encode_indent(workspace_index(hub_name, cargo_metadata, packages, facts_by_fq_crate, feature_resolutions_by_fq_crate, workspace_resolution.exec_resolutions_by_cargo_target_triple, target_hosts, member_lint_configs)) + "\n"
+        hub_contents.append('exports_files(["index.json"], visibility = ["//visibility:public"])')
     _hub_repo(
         name = hub_name,
-        contents = {
+        contents = index_contents | {
             "BUILD.bazel": "\n".join(hub_contents),
             "defs.bzl": defs_bzl_contents,
             "data.bzl": data_bzl_contents,
@@ -753,9 +799,6 @@ RESOLVED_PLATFORMS = select({{
 def _crate_impl(mctx):
     # TODO(zbarsky): Kick off `cargo` fetch early to mitigate https://github.com/bazelbuild/bazel/issues/26995
     cargo_path = mctx.path(RS_HOST_CARGO_LABEL)
-
-    # And toml2json
-    toml2json = mctx.path(Label("@toml2json_%s//file:downloaded" % repo_utils.platform(mctx)))
 
     downloader_state = new_downloader_state()
     suggested_annotation_snippet_paths = well_known_annotation_snippet_paths(mctx)
@@ -809,7 +852,13 @@ def _crate_impl(mctx):
 
             cargo_toml_by_hub_name[cfg.name] = run_toml2json(mctx, cfg.cargo_toml)
             cargo_lock = run_toml2json(mctx, cfg.cargo_lock)
-            parsed_packages = cargo_lock.get("package", [])
+            parsed_packages = locked_packages(cargo_lock)
+            for crate_name, versions in annotations.items():
+                for version, annotation in versions.items():
+                    if annotation.patches:
+                        matches = [p for p in parsed_packages if p["name"] == crate_name and (version == "*" or p["version"] == version)]
+                        if len(matches) != 1 or not matches[0].get("source"):
+                            fail("Source repair must select one exact external locked package: %s %s" % (crate_name, version))
             for package in parsed_packages:
                 package["hub_name"] = cfg.name
                 source = resolve_registry_source(package.get("source"), cargo_config)
@@ -878,9 +927,9 @@ def _crate_impl(mctx):
 
             if cfg.debug:
                 for _ in range(25):
-                    _generate_hub_and_spokes(mctx, cfg.name, annotations, suggested_annotation_snippet_paths, cargo_path, cfg.cargo_lock, cargo_toml_by_hub_name[cfg.name], hub_packages, cfg.platform_triples, cargo_credentials, effective_cargo_config, cfg.validate_lockfile, cfg.debug, cfg.generate_lint_config, cfg.use_legacy_rules_rust_platforms, root_packages = cfg.packages, root_features = cfg.features, include_dev = cfg.include_dev, default_features = cfg.default_features, dry_run = True)
+                    _generate_hub_and_spokes(mctx, cfg.name, annotations, suggested_annotation_snippet_paths, cargo_path, cfg.cargo_lock, cargo_toml_by_hub_name[cfg.name], hub_packages, cfg.platform_triples, cargo_credentials, effective_cargo_config, cfg.validate_lockfile, cfg.debug, cfg.generate_lint_config, cfg.use_legacy_rules_rust_platforms, target_hosts = cfg.target_hosts, workspace_library_target = cfg.workspace_library_target, root_packages = cfg.packages, root_features = cfg.features, include_dev = cfg.include_dev, default_features = cfg.default_features, dry_run = True)
 
-            facts |= _generate_hub_and_spokes(mctx, cfg.name, annotations, suggested_annotation_snippet_paths, cargo_path, cfg.cargo_lock, cargo_toml_by_hub_name[cfg.name], hub_packages, cfg.platform_triples, cargo_credentials, effective_cargo_config, cfg.validate_lockfile, cfg.debug, cfg.generate_lint_config, cfg.use_legacy_rules_rust_platforms, root_packages = cfg.packages, root_features = cfg.features, include_dev = cfg.include_dev, default_features = cfg.default_features)
+            facts |= _generate_hub_and_spokes(mctx, cfg.name, annotations, suggested_annotation_snippet_paths, cargo_path, cfg.cargo_lock, cargo_toml_by_hub_name[cfg.name], hub_packages, cfg.platform_triples, cargo_credentials, effective_cargo_config, cfg.validate_lockfile, cfg.debug, cfg.generate_lint_config, cfg.use_legacy_rules_rust_platforms, target_hosts = cfg.target_hosts, workspace_library_target = cfg.workspace_library_target, root_packages = cfg.packages, root_features = cfg.features, include_dev = cfg.include_dev, default_features = cfg.default_features)
 
     # Lay down the git repos with generated per-crate BUILD overlays.
     git_repos = {}
@@ -918,9 +967,7 @@ def _crate_impl(mctx):
                         repo_name,
                     ))
 
-                strip_prefix = package.get("strip_prefix")
-                if strip_prefix == None:
-                    strip_prefix = json.decode(facts[source + "_" + package["name"]])["strip_prefix"]
+                strip_prefix = git_crate_strip_prefix(package, facts)
                 package_path = _git_crate_package_path(annotation, strip_prefix)
                 build_file_path = paths.join(package_path, "BUILD.bazel") if package_path else "BUILD.bazel"
                 git_repo["build_files"][build_file_path] = _additive_build_file_content(mctx, annotation)
@@ -1005,6 +1052,8 @@ _from_cargo = tag_class(
         "use_home_cargo_credentials": attr.bool(
             doc = "If set, the ruleset will load `~/cargo/credentials.toml` and attach those credentials to registry requests.",
         ),
+        "workspace_library_target": attr.string(doc = "Library target name for workspace member aliases."),
+        "target_hosts": attr.string_dict(doc = "Target-to-compiler-host pairs for the workspace JSON index."),
         "platform_triples": attr.string_list(
             mandatory = True,
             doc = "The set of triples to resolve for. They must correspond to the union of any exec/target platforms that will participate in your build.",
@@ -1153,6 +1202,7 @@ _annotation = tag_class(
         # "override_target_proc_macro": attr.label(
         #     doc = "An optional alternate target to use when something depends on this crate to allow the parent repo to provide its own version of this dependency.",
         # ),
+        "source": attr.string(doc = "Expected exact Cargo.lock source identity for patched packages."),
         "patch_args": attr.string_list(
             doc = "The `patch_args` attribute of a Bazel repository rule. See [http_archive.patch_args](https://docs.bazel.build/versions/main/repo/http.html#http_archive-patch_args)",
         ),

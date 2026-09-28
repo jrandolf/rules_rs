@@ -186,6 +186,7 @@ bzl_library(
         ":cargo_credentials",
         ":registry_utils",
         ":repository_utils",
+        ":source_patches",
         ":toml2json",
         "@bazel_tools//tools/build_defs/repo:cache.bzl",
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
@@ -294,7 +295,7 @@ bzl_library(
     name = "toml2json",
     srcs = ["toml2json.bzl"],
     visibility = ["//rs:__subpackages__"],
-    deps = ["@bazel_lib//lib:repo_utils"],
+    deps = ["@toml.bzl//:toml"],
 )
 
 bzl_library(
@@ -303,7 +304,6 @@ bzl_library(
     visibility = ["//rs:__subpackages__"],
     deps = [
         "@rules_rust//rust:bzl_lib",
-        "@rules_rust//rust/private:bzl_lib",
     ],
 )
 
@@ -314,6 +314,7 @@ bzl_library(
     deps = [
         ":git_workspace_resources",
         ":repository_utils",
+        ":source_patches",
         ":toml2json",
         "@bazel_skylib//lib:paths",
         "@bazel_tools//tools/build_defs/repo:git_worker.bzl",
@@ -447,7 +448,7 @@ bzl_library(
     name = "cargo_lints",
     srcs = ["cargo_lints.bzl"],
     visibility = ["//rs:__subpackages__"],
-    deps = ["@rules_rust//rust/private:bzl_lib"],
+    deps = ["@rules_rust//rust:bzl_lib"],
 )
 
 bzl_library(
@@ -525,6 +526,7 @@ bzl_library(
     deps = [
         ":select_utils",
         "//rs/platforms:triples",
+        "@bazel_skylib//lib:selects",
         "@rules_rust//rust/platform:bzl_lib",
     ],
 )
@@ -534,16 +536,7 @@ bzl_library(
     srcs = ["cargo_context_test.bzl"],
     deps = [
         "@bazel_skylib//lib:unittest",
-        "@rules_rust//rust/private:bzl_lib",
-    ],
-)
-
-bzl_library(
-    name = "repository_utils_test",
-    srcs = ["repository_utils_test.bzl"],
-    deps = [
-        ":repository_utils",
-        "@bazel_skylib//lib:unittest",
+        "@rules_rust//rust:bzl_lib",
     ],
 )
 
@@ -560,4 +553,28 @@ bzl_library(
     name = "git_workspace_resources",
     srcs = ["git_workspace_resources.bzl"],
     visibility = ["//rs:__subpackages__"],
+)
+
+bzl_library(
+    name = "source_patches",
+    srcs = ["source_patches.bzl"],
+    visibility = ["//rs:__subpackages__"],
+)
+
+bzl_library(
+    name = "cargo_integration",
+    srcs = [
+        "proc_macro_alias.bzl",
+        "workspace_index.bzl",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":cargo_workspace_graph",
+        ":cfg_parser",
+        ":crate_configurations",
+        ":repository_utils",
+        ":semver",
+        ":source_patches",
+        "@rules_rust//rust:bzl_lib",
+    ],
 )

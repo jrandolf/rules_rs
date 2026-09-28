@@ -102,7 +102,9 @@ def _license_file(rctx, package_dir, package):
     if type(path) != "string" or not path or paths.is_absolute(path):
         fail("package.license-file must be a nonempty relative path")
     source = package_dir.get_child(path).realpath
-    root = str(rctx.path(".").realpath)
+
+    # Local repositories link their declared source directory into the repository.
+    root = str(rctx.path(getattr(rctx.attr, "path", "") or ".").realpath)
     if not str(source).startswith(root + "/") or not source.exists or source.is_dir:
         fail("package.license-file must name a file inside the source repository: " + path)
 
@@ -245,6 +247,7 @@ _RUST_CRATE_MACRO_CALL = """{indent}rust_crate(
 {indent}    configurations = {configurations},
 {indent}    cargo_target_triple_map = {cargo_target_triple_map},
 {indent}    hub_name = {hub_name},
+{indent}    proc_macro_labels = {proc_macro_labels},
 {skip_deps_verification_attr}{indent})
 """
 
@@ -306,6 +309,7 @@ def render_rust_crate_call(attr, values, bazel_metadata = {}, extra_deps = "", i
         configurations = repr(json.decode(attr.configurations)),
         cargo_target_triple_map = repr(attr.cargo_target_triple_map),
         hub_name = repr(attr.hub_name),
+        proc_macro_labels = repr(getattr(attr, "proc_macro_labels", [])),
         skip_deps_verification_attr = skip_deps_verification_attr,
         **(dict(license_expression = repr(""), license_file = "None") | values)
     )
@@ -328,6 +332,8 @@ load("@rules_rs//rs:rust_binary.bzl", "rust_binary")
 rust_crate_attrs = {
     "crate_visibility": attr.label_list(default = ["//visibility:public"]),
     "hub_name": attr.string(),
+    "proc_macro_labels": attr.string_list(),
+    "extra_compile_data": attr.string_list(),
     "gen_build_script": attr.string(),
     "build_script_data": attr.label_list(),
     "build_script_data_select": _label_list_dict(),
