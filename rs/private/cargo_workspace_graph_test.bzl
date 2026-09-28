@@ -1,5 +1,10 @@
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
 load(":cargo_workspace_graph.bzl", "cargo_toml_dependencies", "compute_package_dep_versions", "new_feature_resolutions", "resolve_cargo_workspace_members", "resolve_packages", "select_package_dep_version", "split_lockfile_packages")
+||||||| parent of 87d0bbd (fix: synthesize implicit optional-dependency features)
+load(":cargo_workspace_graph.bzl", "cargo_toml_dependencies", "compute_package_fq_deps", "new_feature_resolutions", "resolve_cargo_workspace_members", "resolve_package_facts", "select_package_fq_dep", "split_lockfile_packages")
+=======
+load(":cargo_workspace_graph.bzl", "cargo_toml_dependencies", "cargo_toml_fact", "compute_package_fq_deps", "new_feature_resolutions", "resolve_cargo_workspace_members", "resolve_package_facts", "select_package_fq_dep", "split_lockfile_packages")
+>>>>>>> 87d0bbd (fix: synthesize implicit optional-dependency features)
 load(":resolver.bzl", "resolve")
 
 def _select_package_dep_version_impl(ctx):
@@ -643,6 +648,7 @@ def _resolve_cargo_workspace_members_ignores_weak_features_for_unresolved_option
 
 resolve_cargo_workspace_members_ignores_weak_features_for_unresolved_optional_deps_test = unittest.make(_resolve_cargo_workspace_members_ignores_weak_features_for_unresolved_optional_deps_impl)
 
+<<<<<<< HEAD
 def _resolve_cargo_workspace_members_isolates_forwarded_build_features_impl(ctx):
     env = unittest.begin(ctx)
     linux = "x86_64-unknown-linux-gnu"
@@ -992,10 +998,40 @@ def _target_build_dependencies_impl(ctx):
 
 target_build_dependencies_test = unittest.make(_target_build_dependencies_impl)
 
+# Regression for https://github.com/hermeticbuild/rules_rs/issues/275.
+def _optional_dependency_features_impl(ctx):
+    env = unittest.begin(ctx)
+    manifest = {
+        "package": {"name": "consumer"},
+        "dependencies": {
+            "plain": {"optional": True, "version": "1"},
+            "renamed": {"optional": True, "package": "actual", "version": "1"},
+            "hidden": {"optional": True, "version": "1"},
+            "explicit": {"optional": True, "version": "1"},
+            "required": "1",
+        },
+        "target": {"cfg(windows)": {"dependencies": {"conditional": {"optional": True, "version": "1"}}}},
+        "features": {"activate": ["dep:hidden"], "explicit": ["plain"]},
+    }
+    features = cargo_toml_fact(manifest)["features"]
+    asserts.equals(env, {
+        "activate": ["dep:hidden"],
+        "explicit": ["plain"],
+        "plain": ["dep:plain"],
+        "renamed": ["dep:renamed"],
+        "conditional": ["dep:conditional"],
+    }, features)
+    asserts.equals(env, {"activate": ["dep:hidden"], "explicit": ["plain"]}, manifest["features"])
+    return unittest.end(env)
+
+optional_dependency_features_test = unittest.make(_optional_dependency_features_impl)
+
 def cargo_workspace_graph_tests():
     return unittest.suite(
         "cargo_workspace_graph_tests",
         target_build_dependencies_test,
+
+        optional_dependency_features_test,
         cargo_toml_dependencies_handles_workspace_inheritance_test,
         cargo_toml_dependencies_normalizes_dependency_specs_test,
         inactive_crates_remain_unresolved_test,
