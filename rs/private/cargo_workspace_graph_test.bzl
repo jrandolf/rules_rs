@@ -966,9 +966,36 @@ resolve_cargo_workspace_members_groups_seeds_preserving_owners_test = unittest.m
 resolve_cargo_workspace_members_preserves_no_exec_resolution_test = unittest.make(_resolve_cargo_workspace_members_preserves_no_exec_resolution_impl)
 optional_dependency_aliases_follow_enabled_features_test = unittest.make(_optional_dependency_aliases_follow_enabled_features_impl)
 
+# Regression for https://github.com/hermeticbuild/rules_rs/issues/274.
+def _target_build_dependencies_impl(ctx):
+    env = unittest.begin(ctx)
+    got = cargo_toml_dependencies(
+        {"package": {"name": "consumer"}, "target": {"cfg(windows)": {
+            "dependencies": {"runtime": "1"},
+            "build-dependencies": {"generator": {"workspace": True, "optional": True, "features": ["extra"]}},
+        }}},
+        {"workspace": {"dependencies": {"generator": {"package": "actual-generator", "version": "2", "default-features": False, "features": ["base"]}}}},
+    )
+    asserts.equals(env, 2, len(got))
+    asserts.equals(env, {"name": "runtime", "req": "1", "target": "cfg(windows)"}, got[0])
+    asserts.equals(env, {
+        "name": "generator",
+        "package": "actual-generator",
+        "req": "2",
+        "target": "cfg(windows)",
+        "kind": "build",
+        "optional": True,
+        "default_features": False,
+        "features": ["base", "extra"],
+    }, got[1])
+    return unittest.end(env)
+
+target_build_dependencies_test = unittest.make(_target_build_dependencies_impl)
+
 def cargo_workspace_graph_tests():
     return unittest.suite(
         "cargo_workspace_graph_tests",
+        target_build_dependencies_test,
         cargo_toml_dependencies_handles_workspace_inheritance_test,
         cargo_toml_dependencies_normalizes_dependency_specs_test,
         inactive_crates_remain_unresolved_test,
