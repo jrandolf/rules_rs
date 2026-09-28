@@ -992,9 +992,38 @@ resolve_cargo_workspace_members_groups_seeds_preserving_owners_test = unittest.m
 resolve_cargo_workspace_members_preserves_no_exec_resolution_test = unittest.make(_resolve_cargo_workspace_members_preserves_no_exec_resolution_impl)
 optional_dependency_aliases_follow_enabled_features_test = unittest.make(_optional_dependency_aliases_follow_enabled_features_impl)
 
+# Regression for https://github.com/hermeticbuild/rules_rs/issues/275.
+def _optional_dependency_features_impl(ctx):
+    env = unittest.begin(ctx)
+    manifest = {
+        "package": {"name": "consumer"},
+        "dependencies": {
+            "plain": {"optional": True, "version": "1"},
+            "renamed": {"optional": True, "package": "actual", "version": "1"},
+            "hidden": {"optional": True, "version": "1"},
+            "explicit": {"optional": True, "version": "1"},
+            "required": "1",
+        },
+        "target": {"cfg(windows)": {"dependencies": {"conditional": {"optional": True, "version": "1"}}}},
+        "features": {"activate": ["dep:hidden"], "explicit": ["plain"]},
+    }
+    features = cargo_toml_fact(manifest)["features"]
+    asserts.equals(env, {
+        "activate": ["dep:hidden"],
+        "explicit": ["plain"],
+        "plain": ["dep:plain"],
+        "renamed": ["dep:renamed"],
+        "conditional": ["dep:conditional"],
+    }, features)
+    asserts.equals(env, {"activate": ["dep:hidden"], "explicit": ["plain"]}, manifest["features"])
+    return unittest.end(env)
+
+optional_dependency_features_test = unittest.make(_optional_dependency_features_impl)
+
 def cargo_workspace_graph_tests():
     return unittest.suite(
         "cargo_workspace_graph_tests",
+        optional_dependency_features_test,
         target_build_dependencies_test,
         cargo_toml_dependencies_handles_workspace_inheritance_test,
         cargo_toml_dependencies_normalizes_dependency_specs_test,
