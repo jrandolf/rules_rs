@@ -19511,6 +19511,7 @@ dependencies = [
  "libusb1-sys",
  "lz4-sys",
  "meilisearch-sdk",
+ "openssl",
  "oxc",
  "polars",
  "redis",
