@@ -238,3 +238,6 @@ visibility_crate.visibility(
 
 # Import the spoke deliberately to test that direct labels cannot bypass visibility.
 use_repo(visibility_crate, "visibility_hub", "visibility_hub__itoa-1.0.18")
+
+resource_fixtures = use_extension("//rs/private/git_resource_fixture:repos.bzl", "fixtures", dev_dependency = True)
+use_repo(resource_fixtures, "resource_checkout")
