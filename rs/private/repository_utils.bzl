@@ -89,6 +89,23 @@ def inherit_workspace_package_fields(cargo_toml, workspace_cargo_toml, workspace
             crate_package[field] = inherited
     return dict(cargo_toml, package = crate_package)
 
+def _license_file(rctx, package_dir, package):
+    path = package.get("license-file", package.get("license_file"))
+    if path == None:
+        return None
+    if type(path) != "string" or not path or paths.is_absolute(path):
+        fail("package.license-file must be a nonempty relative path")
+    source = package_dir.get_child(path).realpath
+    root = str(rctx.path(".").realpath)
+    if not str(source).startswith(root + "/") or not source.exists or source.is_dir:
+        fail("package.license-file must name a file inside the source repository: " + path)
+
+    # A workspace license can live across a BUILD package boundary. Materialize
+    # its contents beside the crate so metadata can refer to one local label.
+    dest = "__rules_rs_cargo_license.txt"
+    rctx.file(package_dir.get_child(dest), rctx.read(source), executable = False)
+    return dest
+
 def cargo_build_file_values(rctx, cargo_toml, gen_binaries, package_path = "", gen_build_script = None):
     package_dir = rctx.path(package_path or ".")
     package = cargo_toml["package"]
@@ -177,6 +194,8 @@ def cargo_build_file_values(rctx, cargo_toml, gen_binaries, package_path = "", g
             "links": repr(links),
             "name": repr(name),
             "version": repr(version),
+            "license_expression": repr(package.get("license", "")),
+            "license_file": repr(_license_file(rctx, package_dir, package)),
         },
     )
 
@@ -184,6 +203,8 @@ _RUST_CRATE_MACRO_CALL = """{indent}rust_crate(
 {indent}    name = {name},
 {indent}    crate_name = {crate_name},
 {indent}    purl = {purl},
+{indent}    license_expression = {license_expression},
+{indent}    license_file = {license_file},
 {indent}    version = {version},
 {indent}    crate_visibility = {crate_visibility},
 {indent}    deps = [
@@ -272,7 +293,7 @@ def render_rust_crate_call(attr, values, bazel_metadata = {}, extra_deps = "", i
         cargo_target_triple_map = repr(attr.cargo_target_triple_map),
         hub_name = repr(attr.hub_name),
         skip_deps_verification_attr = skip_deps_verification_attr,
-        **values
+        **(dict(license_expression = repr(""), license_file = "None") | values)
     )
 
 def render_build_file_content(rctx, attr, values, bazel_metadata = {}):
