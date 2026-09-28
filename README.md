@@ -693,6 +693,12 @@ builds, a renamed procedural macro, shared host/target dependencies and selected
 macro roots. `rs/private/feature_context_fixture/refresh.py` refreshes that oracle
 using a nightly Cargo toolchain without compiling the fixture.
 
+The compiler analyzes dependency copies in both target and execution configurations
+before selecting ordinary libraries and procedural macros. Generated library aliases
+keep unused copies analyzable without their dependencies, annotations, or build
+scripts. Compiling such a copy directly reports that it has no resolved Cargo
+configuration. Generated binaries remain unavailable outside their resolved rows.
+
 ### Cargo license metadata
 
 Generated `*_package_metadata` targets include the manifest's complete `license`

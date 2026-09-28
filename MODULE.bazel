@@ -230,3 +230,10 @@ use_repo(resource_fixtures, "resource_checkout", "resource_no_build_checkout")
 
 license_fixtures = use_extension("//rs/private/license_fixture:repos.bzl", "fixtures", dev_dependency = True)
 use_repo(license_fixtures, "license_checkout", "license_registry")
+
+rendered_repository = use_repo_rule("//rs/private/feature_context_fixture:rendered.bzl", "rendered_repository")
+
+rendered_repository(
+    name = "feature_context_rendered",
+    dev_dependency = True,
+)

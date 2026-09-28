@@ -20,6 +20,8 @@ load(":semver_test.bzl", "semver_select_tests")
 load(":visibility_test.bzl", "visibility_tests")
 load(":workspace_dep_data_test.bzl", "workspace_dep_data_tests")
 
+exports_files(["inactive_cargo_context.rs"])
+
 bool_setting(
     name = "source_stdlib_building",
     build_setting_default = False,
