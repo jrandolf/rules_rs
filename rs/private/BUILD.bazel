@@ -261,6 +261,7 @@ bzl_library(
         ":cargo_toml_utils",
         ":select_utils",
         ":semver",
+        "@bazel_skylib//lib:paths",
     ],
 )
 
@@ -307,6 +308,7 @@ bzl_library(
     deps = [
         ":repository_utils",
         ":toml2json",
+        "@bazel_skylib//lib:paths",
         "@bazel_tools//tools/build_defs/repo:git_worker.bzl",
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],
@@ -511,5 +513,14 @@ bzl_library(
     deps = [
         "@bazel_skylib//lib:unittest",
         "@rules_rust//rust/private:bzl_lib",
+    ],
+)
+
+bzl_library(
+    name = "repository_utils_test",
+    srcs = ["repository_utils_test.bzl"],
+    deps = [
+        ":repository_utils",
+        "@bazel_skylib//lib:unittest",
     ],
 )

@@ -1,3 +1,4 @@
+load("@bazel_skylib//lib:paths.bzl", "paths")
 load(":cargo_toml_utils.bzl", "cargo_toml_is_proc_macro")
 load(":select_utils.bzl", "compute_select", "platform_label")
 load(":semver.bzl", "parse_full_version")
@@ -42,30 +43,40 @@ def render_select_build_script_env(platform_items, use_legacy_rules_rust_platfor
     return _format_branches(branches)
 
 _INHERITABLE_PACKAGE_FIELDS = [
-    "version",
-    "edition",
+    "authors",
+    "categories",
     "description",
+    "documentation",
+    "edition",
+    "exclude",
     "homepage",
-    "repository",
+    "include",
+    "keywords",
     "license",
-    # TODO(zbarsky): Do we need to fixup the path for readme and license_file?
+    "license-file",
     "license_file",
-    "rust_version",
+    "publish",
     "readme",
+    "repository",
+    "rust-version",
+    "rust_version",
+    "version",
 ]
 
-def inherit_workspace_package_fields(cargo_toml, workspace_cargo_toml):
-    workspace_package = workspace_cargo_toml.get("workspace", {}).get("package")
-    if not workspace_package:
-        return cargo_toml
-
-    crate_package = cargo_toml["package"]
+def inherit_workspace_package_fields(cargo_toml, workspace_cargo_toml, workspace_prefix = ""):
+    """Inherit package values, with file paths relative to the member directory."""
+    workspace_package = workspace_cargo_toml.get("workspace", {}).get("package", {})
+    crate_package = dict(cargo_toml["package"])
     for field in _INHERITABLE_PACKAGE_FIELDS:
         value = crate_package.get(field)
         if type(value) == "dict" and value.get("workspace") == True:
-            crate_package[field] = workspace_package.get(field)
-
-    return cargo_toml
+            if field not in workspace_package:
+                fail("Missing workspace.package." + field)
+            inherited = workspace_package[field]
+            if field in ["readme", "license-file", "license_file"] and type(inherited) == "string":
+                inherited = paths.normalize(paths.join(workspace_prefix, inherited))
+            crate_package[field] = inherited
+    return dict(cargo_toml, package = crate_package)
 
 def cargo_build_file_values(rctx, cargo_toml, gen_binaries, package_path = "", gen_build_script = None):
     package_dir = rctx.path(package_path or ".")
@@ -93,7 +104,7 @@ def cargo_build_file_values(rctx, cargo_toml, gen_binaries, package_path = "", g
         "CARGO_PKG_HOMEPAGE": package.get("homepage", ""),
         "CARGO_PKG_REPOSITORY": package.get("repository", ""),
         "CARGO_PKG_LICENSE": package.get("license", ""),
-        "CARGO_PKG_LICENSE_FILE": package.get("license_file", ""),
+        "CARGO_PKG_LICENSE_FILE": package.get("license-file", package.get("license_file", "")),
         "CARGO_PKG_RUST_VERSION": package.get("rust-version", ""),
         "CARGO_PKG_README": readme,
     }
