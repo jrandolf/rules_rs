@@ -2,7 +2,7 @@
 
 load("@bazel_skylib//lib:partial.bzl", "partial")
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts", "unittest")
-load(":repository_utils.bzl", "inherit_workspace_package_fields", "render_rust_crate_call")
+load(":repository_utils.bzl", "inherit_workspace_package_fields", "render_rust_crate_call", "workspace_package_prefix")
 
 _LINUX = "x86_64-unknown-linux-gnu"
 _MACOS = "aarch64-apple-darwin"
@@ -184,6 +184,19 @@ def _explicit_values_impl(ctx):
     asserts.equals(env, manifest, inherit_workspace_package_fields(manifest, {}))
     return unittest.end(env)
 
+def _workspace_paths_impl(ctx):
+    env = unittest.begin(ctx)
+    for workspace, member, expected in [
+        ("", "crates/member", "../.."),
+        ("workspace", "workspace/crates/member", "../.."),
+        ("workspace", "sibling", "../workspace"),
+        ("workspace", "workspace", ""),
+        ("./library/", "library/std", ".."),
+    ]:
+        asserts.equals(env, expected, workspace_package_prefix(workspace, member))
+    return unittest.end(env)
+
+_workspace_paths_test = unittest.make(_workspace_paths_impl)
 _inheritance_test = unittest.make(_inheritance_impl)
 _explicit_values_test = unittest.make(_explicit_values_impl)
 
@@ -191,6 +204,7 @@ def repository_utils_tests():
     _undeclared_metadata_deps(name = "undeclared_metadata_deps", tags = ["manual"])
     return unittest.suite(
         "repository_utils_tests",
+        _workspace_paths_test,
         _inheritance_test,
         _explicit_values_test,
         _single_crate_test,
