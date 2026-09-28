@@ -1,10 +1,5 @@
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
-load(":cargo_workspace_graph.bzl", "cargo_toml_dependencies", "compute_package_dep_versions", "new_feature_resolutions", "resolve_cargo_workspace_members", "resolve_packages", "select_package_dep_version", "split_lockfile_packages")
-||||||| parent of 87d0bbd (fix: synthesize implicit optional-dependency features)
-load(":cargo_workspace_graph.bzl", "cargo_toml_dependencies", "compute_package_fq_deps", "new_feature_resolutions", "resolve_cargo_workspace_members", "resolve_package_facts", "select_package_fq_dep", "split_lockfile_packages")
-=======
-load(":cargo_workspace_graph.bzl", "cargo_toml_dependencies", "cargo_toml_fact", "compute_package_fq_deps", "new_feature_resolutions", "resolve_cargo_workspace_members", "resolve_package_facts", "select_package_fq_dep", "split_lockfile_packages")
->>>>>>> 87d0bbd (fix: synthesize implicit optional-dependency features)
+load(":cargo_workspace_graph.bzl", "cargo_toml_dependencies", "cargo_toml_fact", "compute_package_dep_versions", "new_feature_resolutions", "resolve_cargo_workspace_members", "resolve_packages", "select_package_dep_version", "split_lockfile_packages")
 load(":resolver.bzl", "resolve")
 
 def _select_package_dep_version_impl(ctx):
@@ -648,7 +643,6 @@ def _resolve_cargo_workspace_members_ignores_weak_features_for_unresolved_option
 
 resolve_cargo_workspace_members_ignores_weak_features_for_unresolved_optional_deps_test = unittest.make(_resolve_cargo_workspace_members_ignores_weak_features_for_unresolved_optional_deps_impl)
 
-<<<<<<< HEAD
 def _resolve_cargo_workspace_members_isolates_forwarded_build_features_impl(ctx):
     env = unittest.begin(ctx)
     linux = "x86_64-unknown-linux-gnu"
@@ -1030,7 +1024,6 @@ def cargo_workspace_graph_tests():
     return unittest.suite(
         "cargo_workspace_graph_tests",
         target_build_dependencies_test,
-
         optional_dependency_features_test,
         cargo_toml_dependencies_handles_workspace_inheritance_test,
         cargo_toml_dependencies_normalizes_dependency_specs_test,
