@@ -692,3 +692,16 @@ The resolver tests include unit graphs captured from Cargo for native and cross
 builds, a renamed procedural macro, shared host/target dependencies and selected
 macro roots. `rs/private/feature_context_fixture/refresh.py` refreshes that oracle
 using a nightly Cargo toolchain without compiling the fixture.
+
+### Cargo license metadata
+
+Generated `*_package_metadata` targets include the manifest's complete `license`
+expression and declared `license-file` contents. Expressions such as
+`MIT OR Apache-2.0` are retained verbatim; generation does not choose an alternative.
+A file-only license uses the identifier `NOASSERTION`. A package declaring neither
+field has no license attribute.
+
+Registry crates and Git workspace members use the same metadata. Workspace
+inheritance resolves license paths relative to the workspace manifest. Declared
+license files must exist inside the source repository; their contents are copied
+beside each crate so Bazel package boundaries cannot hide them from collectors.
