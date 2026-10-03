@@ -356,7 +356,7 @@ def _generate_hub_and_spokes(
         annotation = annotation_for(annotations, package["name"], package["version"], hub_name)
         fact = facts_by_fq_crate[fq]
         opaque_deps = bool(fact.get("bazel_deps")) or (package["source"].startswith("git+") and ("bazel_deps" not in fact or annotation.patches))
-        for field in ["deps", "link_deps", "data", "build_script_data", "build_script_data_select", "build_script_tools", "build_script_tools_select", "build_script_env_files", "build_script_toolchains"]:
+        for field in ["deps", "deps_select", "link_deps", "link_deps_select", "target_compatible_with", "target_compatible_with_select", "data", "build_script_data", "build_script_data_select", "build_script_tools", "build_script_tools_select", "build_script_env_files", "build_script_toolchains"]:
             if getattr(annotation, field):
                 opaque_deps = True
                 break
@@ -404,6 +404,26 @@ def _generate_hub_and_spokes(
             snippet_path = suggested_annotation_snippet_paths.get(crate_name)
             if snippet_path:
                 suggested_annotation = mctx.read(snippet_path).strip()
+        if suggested_annotation:
+            print("""
+WARNING: A well-known crate annotation exists to make builds of {crate} more hermetic! Apply the following to your MODULE.bazel:
+
+```
+{formatted_well_known_annotation}
+```
+
+If non-hermetic builds of {crate} are acceptable, then you can disable this warning by configuring your MODULE.bazel like so:
+
+```
+crate.annotation(
+    crate = "{crate}",
+    gen_build_script = "on",
+)
+```""".format(
+                crate = crate_name,
+                formatted_well_known_annotation = suggested_annotation,
+            ))
+
         crate_configurations = configurations_by_crate[_fq_crate(crate_name, version)]
         kwargs = dict(
             hub_name = hub_name,
@@ -570,6 +590,7 @@ def _generate_hub_and_spokes(
                 _target_label(target_repo_name, target_package_path, name),
                 crate_visibility,
             ))
+
             # The package's package_metadata, for supply-chain checks.
             hub_contents.append("""
 alias(

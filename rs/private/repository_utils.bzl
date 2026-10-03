@@ -114,7 +114,6 @@ def _license_file(rctx, package_dir, package):
     rctx.file(package_dir.get_child(dest), rctx.read(source), executable = False)
     return dest
 
-
 def cargo_build_file_values(rctx, cargo_toml, gen_binaries, package_path = "", gen_build_script = None):
     package_dir = rctx.path(package_path or ".")
     package = cargo_toml["package"]

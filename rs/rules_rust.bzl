@@ -2,9 +2,9 @@
 
 def _rules_rust_repository_impl(rctx):
     rctx.download_and_extract(
-        sha256 = "ad47870bcd02acb76ff0d458fef5c691f061047dbae3145d5ed9eaf9ebb1915f",
-        stripPrefix = "rules_rust-1c7bcfff56668ffd5f5496a1914c93ae5cf3c818",
-        url = "https://codeload.github.com/jrandolf/rules_rust/tar.gz/1c7bcfff56668ffd5f5496a1914c93ae5cf3c818",
+        sha256 = "4bc3818999272400b4fc7ba70663b502e28edd360646e10417104ed1e5fac47f",
+        stripPrefix = "rules_rust-586496993e13eba643a21e2387f7a91155b1aa55",
+        url = "https://codeload.github.com/jrandolf/rules_rust/tar.gz/586496993e13eba643a21e2387f7a91155b1aa55",
         type = "tar.gz",
     )
     for patch in rctx.attr.patches:

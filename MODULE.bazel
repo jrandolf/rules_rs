@@ -9,7 +9,7 @@ rules_rust = use_extension("//rs:rules_rust.bzl", "rules_rust")
 bazel_dep(name = "rules_rust", version = "0.74.0")
 git_override(
     module_name = "rules_rust",
-    commit = "1c7bcfff56668ffd5f5496a1914c93ae5cf3c818",
+    commit = "586496993e13eba643a21e2387f7a91155b1aa55",
     remote = "https://github.com/jrandolf/rules_rust.git",
 )
 
