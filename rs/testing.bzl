@@ -8,9 +8,9 @@ load("//rs/private:cargo_workspace_graph.bzl", _cargo_toml_fact = "cargo_toml_fa
 load("//rs/private:cfg_parser.bzl", _cfg_matches_expr_for_triples = "cfg_matches_expr_for_triples")
 load("//rs/private:repository_utils.bzl", _inherit_workspace_package_fields = "inherit_workspace_package_fields")
 load("//rs/private:source_patches.bzl", _source_patch_paths = "source_patch_paths")
-load("//rs/private:visibility.bzl", _visibility_for = "visibility_for")
+load("//rs/private:visibility.bzl", _visibility_with_internal_access = "visibility_with_internal_access")
 
-visibility_for = _visibility_for
+visibility_with_internal_access = _visibility_with_internal_access
 cargo_toml_fact = _cargo_toml_fact
 fq_crate = _fq_crate
 locked_packages = _locked_packages
