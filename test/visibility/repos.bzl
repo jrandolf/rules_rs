@@ -9,7 +9,19 @@ def _repo_impl(rctx):
     rctx.file("cargo_toml_env_vars.env", "")
     rctx.file("lib.rs", "extern crate proc_macro;\n" if rctx.attr.macro else "pub fn value() -> u8 { 1 }\n")
     rctx.file("main.rs", "fn main() {}\n")
+    rctx.file("build.rs", """fn main() {
+    let target = std::env::var("CARGO_CFG_TARGET_OS").expect("missing Cargo target OS");
+    let flag = match target.as_str() {
+        "windows" => "/INCREMENTAL:NO",
+        "macos" => "-Wl,-dead_strip",
+        _ => "-Wl,--as-needed",
+    };
+    println!("cargo:rustc-link-arg-bin=cargo-probe={flag}");
+}
+""")
     rctx.file("BUILD.bazel", """load("@rules_rs//rs/private:rust_crate.bzl", "rust_crate")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+cargo_build_script(name = "_bin_link_args", srcs = ["build.rs"], crate_root = "build.rs")
 RESOLVED_PLATFORMS = []
 """ + render_rust_crate_call(rctx.attr, {
         "name": repr(crate_name),
@@ -23,7 +35,7 @@ RESOLVED_PLATFORMS = []
         "has_lib": "True",
         "is_proc_macro": repr(rctx.attr.macro),
         "links": "None",
-    }))
+    }, extra_deps = repr([":_bin_link_args"])))
 
 _repo = repository_rule(implementation = _repo_impl, attrs = rust_crate_attrs | {"macro": attr.bool(), "crate_name": attr.string(default = "sample")})
 
