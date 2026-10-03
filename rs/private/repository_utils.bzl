@@ -217,7 +217,8 @@ _RUST_CRATE_MACRO_CALL = """{indent}rust_crate(
 {indent}    crate_visibility = {crate_visibility},
 {indent}    deps = [
 {indent}        {deps}
-{indent}    ]{conditional_deps}{extra_deps},
+{indent}    ]{extra_deps},
+{indent}    deps_select = {deps_select},
 {indent}    link_deps = [
 {indent}        {link_deps}
 {indent}    ]{conditional_link_deps},
@@ -256,12 +257,13 @@ def render_rust_crate_call(attr, values, bazel_metadata = {}, extra_deps = "", i
         for cargo_target_triple in attr.cargo_target_triple_map:
             if cargo_target_triple:
                 fail("Declare package.metadata.bazel.deps in crate.annotation(deps = ...) so Cargo configuration sharing accounts for these dependencies.")
-    deps = [str(dep) for dep in attr.deps] + bazel_metadata.get("deps", [])
-
     build_script_data, conditional_build_script_data = render_select(attr.build_script_data, attr.build_script_data_select, use_legacy_rules_rust_platforms)
     build_script_tools, conditional_build_script_tools = render_select(attr.build_script_tools, attr.build_script_tools_select, use_legacy_rules_rust_platforms)
     rustc_flags, conditional_rustc_flags = render_select(attr.rustc_flags, attr.rustc_flags_select, use_legacy_rules_rust_platforms)
-    deps, conditional_deps = render_select(attr.deps + bazel_metadata.get("deps", []), attr.deps_select, use_legacy_rules_rust_platforms)
+    deps, deps_select = compute_select(
+        [str(dep) for dep in attr.deps + bazel_metadata.get("deps", [])],
+        {triple: [str(dep) for dep in labels] for triple, labels in getattr(attr, "deps_select", {}).items()},
+    )
     link_deps, conditional_link_deps = render_select(getattr(attr, "link_deps", []), getattr(attr, "link_deps_select", {}), use_legacy_rules_rust_platforms)
     target_compatible_with, conditional_target_compatible_with = render_select(getattr(attr, "target_compatible_with", []), getattr(attr, "target_compatible_with_select", {}), use_legacy_rules_rust_platforms)
     build_script_env_files = getattr(attr, "build_script_env_files", []) + ["cargo_toml_env_vars.env"]
@@ -279,11 +281,11 @@ def render_rust_crate_call(attr, values, bazel_metadata = {}, extra_deps = "", i
     skip_deps_verification_attr = "%s    skip_deps_verification = True,\n" % indent if skip_deps_verification else ""
 
     return _RUST_CRATE_MACRO_CALL.format(
-        crate_visibility = repr([str(label) for label in attr.crate_visibility]),
+        crate_visibility = repr([str(label) for label in getattr(attr, "crate_visibility", ["//visibility:public"])]),
         indent = indent,
         deps = list_indent.join(['"%s"' % d for d in sorted(deps)]),
         extra_deps = extra_deps,
-        conditional_deps = " + " + conditional_deps if conditional_deps else "",
+        deps_select = repr(deps_select),
         link_deps = list_indent.join(['"%s"' % d for d in sorted(link_deps)]),
         conditional_link_deps = " + " + conditional_link_deps if conditional_link_deps else "",
         data = list_indent.join(['"%s"' % str(d) for d in attr.data]),

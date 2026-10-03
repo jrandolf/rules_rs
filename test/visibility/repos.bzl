@@ -47,11 +47,12 @@ def _fixtures_impl(_mctx):
     ]:
         _repo(
             name = name,
+            configurations = "{}",
             macro = name == "visibility_macro",
             crate_name = name if name in ["visibility_private", "visibility_empty"] else "sample",
             crate_visibility = visibility_with_internal_access(visibility, internal),
             deps = ["@visibility_lib//:sample", "@visibility_private//:visibility_private", "@visibility_empty//:visibility_empty"] if name == "visibility_dependent" else [],
         )
-    _repo(name = "visibility_public")
+    _repo(name = "visibility_public", configurations = "{}")
 
 fixtures = module_extension(implementation = _fixtures_impl)

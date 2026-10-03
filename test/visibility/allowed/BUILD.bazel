@@ -1,5 +1,5 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("//rs/private/visibility_fixture:tests.bzl", "binary_name_test")
+load("//visibility:tests.bzl", "binary_name_test")
 
 binary_name_test(
     name = "binary_name_test",

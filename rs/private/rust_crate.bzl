@@ -10,6 +10,7 @@ load("//rs:rust_library.bzl", "rust_library")
 load("//rs:rust_proc_macro.bzl", "rust_proc_macro")
 load(":cargo_build_script_variants.bzl", "cargo_build_script_for_configurations")
 load(":cargo_select.bzl", "cargo_select")
+load(":select_utils.bzl", "platform_label")
 
 def rust_crate(
         name,
@@ -46,6 +47,7 @@ def rust_crate(
         skip_deps_verification = False,
         crate_visibility = ["//visibility:public"],
         target_compatible_with = [],
+        deps_select = {},
         proc_macro_labels = []):
     if allow_build_script_to_detect_nonhermetic_paths:
         fail("The selected compiler rules do not support nonhermetic build-script paths")
@@ -80,19 +82,30 @@ def rust_crate(
                 selected = []
                 for label in labels:
                     label = native.package_relative_label(label)
-                    if label not in deps:
+                    if label not in deps and label not in [native.package_relative_label(dep) for dep in deps_select.get(platform_triple, [])]:
                         selected.append(label)
                 resolved_deps[cargo_target_triple][platform_triple] = selected
         deps = list(deps)
     else:
         resolved_deps = {
-            cargo_target_triple: {platform_triple: list(deps) for platform_triple, deps in configuration["deps_by_triple"].items()}
+            cargo_target_triple: {platform_triple: [dep for dep in deps if native.package_relative_label(dep) not in [native.package_relative_label(selected) for selected in deps_select.get(platform_triple, [])]] for platform_triple, deps in configuration["deps_by_triple"].items()}
             for cargo_target_triple, configuration in configurations.items()
         }
     macro_labels = {native.package_relative_label(label): True for label in proc_macro_labels}
     macro_deps = [dep for dep in deps if native.package_relative_label(dep) in macro_labels] + cargo_select({cargo_target: {triple: [dep for dep in values if native.package_relative_label(dep) in macro_labels] for triple, values in by_triple.items()} for cargo_target, by_triple in resolved_deps.items()}, hub_name, use_legacy_rules_rust_platforms, default = [])
     resolved_deps = {cargo_target: {triple: [dep for dep in values if native.package_relative_label(dep) not in macro_labels] for triple, values in by_triple.items()} for cargo_target, by_triple in resolved_deps.items()}
     deps = [dep for dep in deps if native.package_relative_label(dep) not in macro_labels] + cargo_select(resolved_deps, hub_name, use_legacy_rules_rust_platforms, default = [])
+    if deps_select:
+        # Keep annotation selections as data until ordinary and procedural macro
+        # dependencies have been separated for the standard compiler.
+        selected_deps = {}
+        selected_macros = {}
+        for triple, labels in deps_select.items():
+            platform = platform_label(triple, use_legacy_rules_rust_platforms)
+            selected_deps[platform] = [dep for dep in labels if native.package_relative_label(dep) not in macro_labels]
+            selected_macros[platform] = [dep for dep in labels if native.package_relative_label(dep) in macro_labels]
+        deps = deps + select(selected_deps | {"//conditions:default": []})
+        macro_deps = macro_deps + select(selected_macros | {"//conditions:default": []})
     crate_features = cargo_select(
         {cargo_target_triple: configuration["crate_features_by_triple"] for cargo_target_triple, configuration in configurations.items()},
         hub_name,
